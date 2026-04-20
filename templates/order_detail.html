@@ -30,6 +30,13 @@
 .rev-form{background:var(--bg3);border-radius:12px;padding:1.1rem}
 .tag-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .75rem;border-radius:20px;font-size:.78rem;cursor:pointer;border:1px solid var(--border);color:var(--text2);transition:.2s;margin:.2rem .2rem 0 0}
 .tag-chip.on{border-color:var(--A);color:var(--A);background:rgba(91,141,239,.1)}
+/* 交付物卡片 */
+.deliver-card{background:linear-gradient(120deg,rgba(62,207,170,.08),rgba(91,141,239,.05));border:1px solid rgba(62,207,170,.3);border-radius:12px;padding:1.1rem;margin-bottom:1.4rem}
+.deliver-card .dc-hd{display:flex;align-items:center;gap:.5rem;font-weight:600;margin-bottom:.75rem;color:var(--C)}
+.deliver-card .dc-note{font-size:.88rem;color:var(--text2);line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.deliver-card .dc-link{display:inline-flex;align-items:center;gap:.35rem;margin-top:.65rem;font-size:.83rem;color:var(--A);text-decoration:underline;text-underline-offset:3px}
+/* 验收提示 */
+.confirm-hint{background:rgba(245,197,66,.1);border:1px solid rgba(245,197,66,.3);border-radius:10px;padding:.85rem 1.1rem;margin-bottom:1.4rem;font-size:.85rem;display:flex;align-items:flex-start;gap:.6rem}
 </style>
 {% endblock %}
 {% block content %}
@@ -42,7 +49,12 @@
           <div class="oid">订单编号：#{{ "%06d"|format(order.id) }}</div>
         </div>
         <span class="badge b-{{ order.status }}">
-          {% if order.status=='pending' %}待支付{% elif order.status=='paid' %}已支付{% elif order.status=='in_progress' %}进行中{% elif order.status=='delivered' %}待验收{% elif order.status=='completed' %}已完成{% else %}已取消{% endif %}
+          {% if order.status=='pending' %}待支付
+          {% elif order.status=='paid' %}已支付
+          {% elif order.status=='in_progress' %}进行中
+          {% elif order.status=='delivered' %}待验收
+          {% elif order.status=='completed' %}已完成
+          {% else %}已取消{% endif %}
         </span>
       </div>
 
@@ -63,8 +75,30 @@
         <div class="ii"><div class="il">下单时间</div><div class="iv">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</div></div>
         <div class="ii"><div class="il">订单金额</div><div class="iv" style="color:var(--B)">¥{{ "%.2f"|format(order.price) }}</div></div>
         {% if order.provider_rel %}<div class="ii"><div class="il">服务提供者</div><div class="iv">{{ order.provider_rel.name }}</div></div>{% endif %}
-        {% if order.note %}<div class="ii" style="grid-column:1/-1"><div class="il">备注</div><div class="iv" style="font-size:.82rem;color:var(--text2)">{{ order.note }}</div></div>{% endif %}
+        {% if order.note %}<div class="ii" style="grid-column:1/-1"><div class="il">买家备注</div><div class="iv" style="font-size:.82rem;color:var(--text2)">{{ order.note }}</div></div>{% endif %}
       </div>
+
+      {# ── 交付物展示（服务者已交付后显示给买家）──────────────── #}
+      {% if order.status in ['delivered','completed'] and order.deliver_note %}
+      <div class="deliver-card">
+        <div class="dc-hd">📬 服务者的交付内容</div>
+        <div class="dc-note">{{ order.deliver_note }}</div>
+        {% if order.deliver_link %}
+        <a href="{{ order.deliver_link }}" target="_blank" class="dc-link">🔗 查看交付链接</a>
+        {% endif %}
+        {% if order.delivered_at %}
+        <div style="font-size:.72rem;color:var(--text3);margin-top:.65rem">交付时间：{{ order.delivered_at.strftime('%Y-%m-%d %H:%M') }}</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# ── 待验收时的操作提示 ────────────────────────────────── #}
+      {% if order.status=='delivered' and order.user_id==current_user.id %}
+      <div class="confirm-hint">
+        <span>💡</span>
+        <span>服务者已提交交付内容，请仔细核查上方交付物后点击「确认验收」完成订单。如有问题可通过消息联系服务者。</span>
+      </div>
+      {% endif %}
 
       <div class="acts">
         {% if order.status=='pending' and order.user_id==current_user.id %}
@@ -75,10 +109,10 @@
           <button class="btn btn-ok" onclick="doAct('/order/{{ order.id }}/start','确认开始服务？')">▶️ 开始服务</button>
         {% endif %}
         {% if order.status=='in_progress' and is_provider %}
-          <button class="btn btn-p" onclick="doAct('/order/{{ order.id }}/deliver','确认提交交付？')">📦 提交交付</button>
+          <button class="btn btn-p" onclick="document.getElementById('deliverModal').classList.add('on')">📦 提交交付</button>
         {% endif %}
         {% if order.status=='delivered' and order.user_id==current_user.id %}
-          <button class="btn btn-ok" onclick="doAct('/order/{{ order.id }}/complete','确认验收并完成？')">✅ 确认验收</button>
+          <button class="btn btn-ok" onclick="doAct('/order/{{ order.id }}/complete','确认验收并完成订单？完成后将无法撤销。')">✅ 确认验收</button>
         {% endif %}
         {% if order.status=='paid' and not is_provider %}
           <button class="btn btn-d" onclick="doAct('/order/{{ order.id }}/cancel','确认取消订单？')">取消订单</button>
@@ -120,10 +154,12 @@
       <div style="font-weight:600;margin-bottom:1.1rem">订单状态</div>
       <div style="position:relative;padding-left:1.85rem">
         <div style="position:absolute;left:6px;top:0;bottom:0;width:2px;background:var(--border)"></div>
-        {% for label,cond in [('订单已创建',True),('等待支付',order.status in ['paid','in_progress','delivered','completed']),
-           ('服务进行中',order.status in ['in_progress','delivered','completed']),
-           ('已交付/待验收',order.status in ['delivered','completed']),
-           ('服务已完成',order.status=='completed')] %}
+        {% for label,cond in [
+          ('订单已创建', True),
+          ('等待支付',   order.status in ['paid','in_progress','delivered','completed']),
+          ('服务进行中', order.status in ['in_progress','delivered','completed']),
+          ('已交付/待验收', order.status in ['delivered','completed']),
+          ('服务已完成', order.status=='completed')] %}
         <div style="position:relative;padding-bottom:1.1rem">
           <div style="position:absolute;left:-1.55rem;top:5px;width:11px;height:11px;border-radius:50%;background:{{ 'var(--C)' if cond else 'var(--bg3)' }};border:2px solid {{ 'var(--C)' if cond else 'var(--border)' }};transition:.3s"></div>
           <div style="font-size:.88rem;font-weight:{{ '500' if cond else '400' }};color:{{ 'var(--text)' if cond else 'var(--text3)' }}">{{ label }}</div>
@@ -132,9 +168,11 @@
       </div>
     </div>
 
+    {# ── 评价区块（已完成订单）──────────────────────────────── #}
     {% if order.status=='completed' %}
     <div class="ocard">
       {% if order.review %}
+        {# 已评价：显示评价内容 #}
         <div style="font-weight:600;margin-bottom:.9rem">我的评价</div>
         <div style="display:flex;gap:.4rem;margin-bottom:.45rem;color:#f5c542">{{ '★'*order.review.rating }}{{ '☆'*(5-order.review.rating) }}</div>
         {% if order.review.tags %}
@@ -142,6 +180,7 @@
         {% endif %}
         <p style="color:var(--text2);font-size:.86rem">{{ order.review.comment or '（无文字评价）' }}</p>
       {% elif order.user_id==current_user.id %}
+        {# 未评价买家：显示评价表单 #}
         <div style="font-weight:600;margin-bottom:.9rem">📝 评价此服务</div>
         <form method="POST" action="/order/{{ order.id }}/review" class="rev-form">
           <div class="fg">
@@ -165,16 +204,82 @@
           </div>
           <button type="submit" class="btn btn-p">提交评价</button>
         </form>
+      {% else %}
+        {# 卖家视角：显示买家评价（如果有） #}
+        <div style="font-weight:600;margin-bottom:.9rem">买家评价</div>
+        <p style="color:var(--text3);font-size:.86rem">买家暂未留下评价。</p>
       {% endif %}
     </div>
     {% endif %}
+
   </div>
 </div>
+
+{# ── 提交交付弹窗 ──────────────────────────────────────────── #}
+<div class="modal-bg" id="deliverModal">
+  <div class="modal" style="max-width:500px">
+    <h3>📦 提交交付</h3>
+    <p>请填写交付内容，买家验收后订单完成。</p>
+    <form id="deliverForm">
+      <div class="fg">
+        <label class="fl-label">交付说明 <span style="color:var(--B)">*</span></label>
+        <textarea name="note" id="deliverNote" class="fc" rows="5"
+          placeholder="详细描述你交付的成果、文件说明、使用方法等…" maxlength="1000"></textarea>
+      </div>
+      <div class="fg">
+        <label class="fl-label">交付链接（可选，如网盘/作品链接）</label>
+        <input type="text" name="link" id="deliverLink" class="fc" placeholder="https://…">
+      </div>
+      <div class="modal-acts">
+        <button type="button" class="btn btn-p" style="flex:1" onclick="submitDeliver()">确认提交交付</button>
+        <button type="button" class="btn btn-s" onclick="document.getElementById('deliverModal').classList.remove('on')">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
-function setR(n){document.getElementById('ri').value=n;document.querySelectorAll('.sb').forEach((s,i)=>s.classList.toggle('on',i<n));}
+function setR(n){
+  document.getElementById('ri').value=n;
+  document.querySelectorAll('.sb').forEach((s,i)=>s.classList.toggle('on',i<n));
+}
 setR(5);
-function toggleTag(cb,idx){document.getElementById('tc_'+idx).classList.toggle('on',cb.checked);}
-async function doAct(url,msg){if(!confirm(msg))return;const r=await fetch(url,{method:'POST'});const d=await r.json();alert(d.msg);if(d.ok)location.reload();}
-function setStep(idx){if(!confirm('标记步骤 '+idx+' 完成？'))return;const fd=new FormData();fd.append('step',idx);fetch('/order/{{ order.id }}/step',{method:'POST',body:fd}).then(r=>r.json()).then(()=>location.reload());}
+
+function toggleTag(cb,idx){
+  document.getElementById('tc_'+idx).classList.toggle('on',cb.checked);
+}
+
+async function doAct(url,msg){
+  if(!confirm(msg))return;
+  const r=await fetch(url,{method:'POST'});
+  const d=await r.json();
+  alert(d.msg);
+  if(d.ok)location.reload();
+}
+
+function setStep(idx){
+  if(!confirm('标记步骤 '+idx+' 完成？'))return;
+  const fd=new FormData();fd.append('step',idx);
+  fetch('/order/{{ order.id }}/step',{method:'POST',body:fd}).then(r=>r.json()).then(()=>location.reload());
+}
+
+// 关闭弹窗点击背景
+document.getElementById('deliverModal')?.addEventListener('click',e=>{
+  if(e.target===e.currentTarget)e.currentTarget.classList.remove('on');
+});
+
+// 提交交付（带交付说明）
+async function submitDeliver(){
+  const note=document.getElementById('deliverNote').value.trim();
+  const link=document.getElementById('deliverLink').value.trim();
+  if(!note){alert('请填写交付说明');return;}
+  const fd=new FormData();
+  fd.append('note',note);
+  if(link)fd.append('link',link);
+  const r=await fetch('/order/{{ order.id }}/deliver',{method:'POST',body:fd});
+  const d=await r.json();
+  alert(d.msg);
+  if(d.ok){document.getElementById('deliverModal').classList.remove('on');location.reload();}
+}
 </script>
 {% endblock %}
