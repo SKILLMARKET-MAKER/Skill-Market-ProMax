@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}注册 — SkillMarket{% endblock %}
+{% block breadcrumb_label %}注册{% endblock %}
+{% block head %}
+<style>
+.auth-page{min-height:calc(100vh - 110px);display:flex;align-items:center;justify-content:center;padding:2rem;
+  background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(91,141,239,.1) 0%,transparent 65%)}
+.auth-box{width:100%;max-width:500px}
+.auth-logo{text-align:center;margin-bottom:1.8rem}
+.auth-logo .aln{font-family:'DM Serif Display',serif;font-size:1.5rem;
+  background:linear-gradient(120deg,var(--A),var(--B));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.auth-logo p{color:var(--text3);font-size:.82rem;margin-top:.35rem}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:2.25rem;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.auth-card h2{font-size:1.35rem;font-weight:700;margin-bottom:.3rem}
+.auth-card .sub{color:var(--text3);font-size:.82rem;margin-bottom:1.75rem}
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.5rem}
+.role-opt{padding:.9rem;border-radius:12px;border:2px solid var(--border);cursor:pointer;text-align:center;transition:.25s}
+.role-opt:has(input:checked){border-color:var(--A);background:rgba(91,141,239,.09);box-shadow:0 0 0 3px var(--glow-a)}
+.role-opt input{display:none}
+.role-opt .ri{font-size:1.5rem;margin-bottom:.3rem}
+.role-opt .rl{font-size:.84rem;font-weight:600}
+.role-opt .rd{font-size:.73rem;color:var(--text3);margin-top:.15rem}
+.divider{text-align:center;position:relative;margin:1.25rem 0}
+.divider::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:var(--border)}
+.divider span{position:relative;background:var(--card);padding:0 .9rem;color:var(--text3);font-size:.78rem}
+.prov-extra{display:none}
+.auth-foot{text-align:center;margin-top:1.25rem;color:var(--text3);font-size:.82rem}
+.auth-foot a{color:var(--A);transition:.15s}
+.auth-foot a:hover{text-decoration:underline}
+</style>
+{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="aln">SkillMarket</div>
+      <p>专业技能交易平台 · Created by Three Men Together</p>
+    </div>
+    <div class="auth-card">
+      <h2>创建新账户 🎉</h2>
+      <p class="sub">加入我们，开始你的技能之旅</p>
+
+      <form method="POST" id="regForm">
+        <div class="fg">
+          <label class="fl-label">选择账户类型</label>
+          <div class="role-grid">
+            <label class="role-opt">
+              <input type="radio" name="role" value="user" checked onchange="toggleProv(false)">
+              <div class="ri">🛍️</div>
+              <div class="rl">普通用户</div>
+              <div class="rd">购买技能服务</div>
+            </label>
+            <label class="role-opt">
+              <input type="radio" name="role" value="provider" onchange="toggleProv(true)">
+              <div class="ri">💼</div>
+              <div class="rl">服务提供者</div>
+              <div class="rd">发布并销售服务</div>
+            </label>
+          </div>
+        </div>
+
+        <div class="fg">
+          <label class="fl-label">用户名 *</label>
+          <input type="text" name="username" class="fc" placeholder="设置你的用户名" required>
+        </div>
+        <div class="fg">
+          <label class="fl-label">邮箱地址 *</label>
+          <input type="email" name="email" class="fc" placeholder="your@email.com" required>
+        </div>
+        <div class="fg">
+          <label class="fl-label">密码 *（至少6位）</label>
+          <input type="password" name="password" class="fc" placeholder="设置登录密码" required minlength="6">
+        </div>
+
+        <div class="prov-extra" id="provExtra">
+          <div class="divider"><span>服务提供者专属信息</span></div>
+          <div class="fg">
+            <label class="fl-label">显示名称（买家看到的名字）</label>
+            <input type="text" name="name" class="fc" placeholder="输入你的真实姓名或昵称">
+          </div>
+          <div class="fg">
+            <label class="fl-label">个人简介</label>
+            <textarea name="bio" class="fc" rows="3" placeholder="介绍你的专业背景、擅长领域…"></textarea>
+          </div>
+          <div class="fg">
+            <label class="fl-label">所在城市</label>
+            <input type="text" name="location" class="fc" placeholder="例如：北京、上海、广州">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-p btn-w btn-lg">🚀 立即注册</button>
+      </form>
+      <div class="auth-foot">已有账户？<a href="/login">直接登录</a></div>
+    </div>
+  </div>
+</div>
+<script>
+function toggleProv(show){
+  document.getElementById('provExtra').style.display=show?'block':'none';
+}
+</script>
+{% endblock %}

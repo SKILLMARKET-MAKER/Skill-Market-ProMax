@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}举报 — SkillMarket{% endblock %}
+{% block breadcrumb_label %}举报{% endblock %}
+{% block content %}
+<div class="wrap" style="max-width:560px;margin:0 auto">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:2rem;box-shadow:var(--shadow-sm)">
+    <div style="text-align:center;margin-bottom:1.75rem">
+      <div style="font-size:2.8rem;filter:drop-shadow(0 4px 12px rgba(232,93,138,.3))">🚩</div>
+      <h1 style="font-size:1.3rem;font-weight:700;margin-top:.5rem">举报</h1>
+      <p style="color:var(--text3);font-size:.82rem;margin-top:.35rem;line-height:1.7">您的举报将严格保密。平台将在 <strong style="color:var(--text)">3个工作日</strong> 内处理。<br>恶意举报将承担相应责任，请如实填写。</p>
+    </div>
+    <div style="background:var(--bg3);border-radius:10px;padding:.75rem 1rem;margin-bottom:1.35rem;font-size:.82rem;color:var(--text2);border:1px solid var(--border)">
+      举报对象：<strong style="color:var(--text)">{{ {'provider':'服务提供者','service':'服务内容','order':'订单交易'}.get(target_type,'未知') }} #{{ target_id }}</strong>
+    </div>
+    <form action="/report" method="POST">
+      <input type="hidden" name="target_type" value="{{ target_type }}">
+      <input type="hidden" name="target_id" value="{{ target_id }}">
+      <div class="fg">
+        <label class="fl-label">举报原因 *</label>
+        {% for r in REPORT_REASONS %}
+        <label style="display:flex;align-items:center;gap:.75rem;padding:.7rem .9rem;border-radius:10px;cursor:pointer;border:1px solid var(--border);margin-bottom:.5rem;transition:.2s" class="reason-opt" onmouseover="this.style.borderColor='rgba(232,93,138,.3)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--border)'">
+          <input type="radio" name="reason" value="{{ r }}" required style="accent-color:var(--B);flex-shrink:0">
+          <span style="font-size:.86rem">{{ r }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="fg">
+        <label class="fl-label">补充说明（选填）</label>
+        <textarea name="detail" class="fc" rows="4" maxlength="500" placeholder="请描述具体情况，有助于加快处理速度…"></textarea>
+        <span style="font-size:.72rem;color:var(--text3)">最多 500 字</span>
+      </div>
+      <div style="background:rgba(232,93,138,.07);border:1px solid rgba(232,93,138,.18);border-radius:10px;padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.8rem;color:var(--text2);display:flex;align-items:flex-start;gap:.5rem">
+        <span style="flex-shrink:0">⚠️</span>
+        <span>SkillMarket 零容忍欺诈、骚扰及违规行为。感谢您帮助维护社区安全。</span>
+      </div>
+      <div style="display:flex;gap:.65rem">
+        <button type="submit" class="btn btn-d btn-lg" style="flex:1">提交举报</button>
+        <a href="javascript:history.back()" class="btn btn-s btn-lg">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.reason-opt').forEach(opt=>{
+  opt.querySelector('input').addEventListener('change',function(){
+    document.querySelectorAll('.reason-opt').forEach(o=>{
+      o.style.borderColor=o.querySelector('input').checked?'var(--B)':'var(--border)';
+      o.style.background=o.querySelector('input').checked?'rgba(232,93,138,.06)':'transparent';
+    });
+  });
+});
+</script>
+{% endblock %}
