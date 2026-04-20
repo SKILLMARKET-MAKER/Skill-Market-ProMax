@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}浏览服务 — SkillMarket{% endblock %}
+{% block breadcrumb_label %}浏览服务{% endblock %}
+{% block head %}
+<style>
+.pg-layout{display:grid;grid-template-columns:240px 1fr;gap:1.75rem;align-items:start}
+@media(max-width:760px){.pg-layout{grid-template-columns:1fr}.sidebar{display:none}}
+.sidebar{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.35rem;position:sticky;top:100px}
+.sb-title{font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.85rem}
+.sb-sec{margin-bottom:1.5rem}
+.cf-item{display:flex;align-items:center;justify-content:space-between;padding:.45rem .65rem;border-radius:8px;cursor:pointer;transition:.15s;font-size:.86rem}
+.cf-item:hover{background:var(--bg3)}
+.cf-item.on{background:rgba(91,141,239,.13);color:var(--A)}
+.price-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem}
+.rc{color:var(--text3);font-size:.82rem}
+.sort-sel{padding:.38rem .75rem;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;cursor:pointer;transition:.2s}
+.sort-sel:focus{outline:none;border-color:var(--A);box-shadow:0 0 0 3px var(--glow-a)}
+.sbar-row{display:flex;gap:.65rem;margin-bottom:1.35rem}
+.sbar-row input{flex:1}
+.pg{display:flex;gap:.45rem;justify-content:center;margin-top:1.75rem;flex-wrap:wrap}
+.pgb{padding:.45rem .85rem;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:.82rem;cursor:pointer;transition:.2s}
+.pgb:hover,.pgb.on{background:var(--A);color:#fff;border-color:var(--A);box-shadow:0 2px 10px rgba(91,141,239,.3)}
+.empty{text-align:center;padding:3.5rem 2rem;color:var(--text3)}
+.empty .ei{font-size:2.8rem;margin-bottom:.8rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="pg-layout">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <form method="GET">
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <div class="sb-sec">
+          <div class="sb-title">服务分类</div>
+          <a href="/services?sort={{ sort }}" class="cf-item {% if not current_category %}on{% endif %}">全部分类</a>
+          {% for cat in categories %}
+          <a href="/services?category={{ cat }}&sort={{ sort }}" class="cf-item {% if current_category==cat %}on{% endif %}">
+            {{ cat_icons[cat] }} {{ cat }}
+          </a>
+          {% endfor %}
+        </div>
+        <div class="sb-sec">
+          <div class="sb-title">价格范围</div>
+          <div class="price-row">
+            <input type="number" name="min_price" class="fc" placeholder="最低" value="{{ request.args.get('min_price','') }}" min="0">
+            <input type="number" name="max_price" class="fc" placeholder="最高" value="{{ request.args.get('max_price','') }}" min="0">
+          </div>
+          <button type="submit" class="btn btn-s btn-w" style="margin-top:.65rem;font-size:.82rem">应用筛选</button>
+        </div>
+      </form>
+    </aside>
+
+    <!-- 主内容 -->
+    <div>
+      <div class="sbar-row">
+        <input type="text" class="fc" id="sb" placeholder="搜索服务名称…" value="{{ search }}">
+        <button class="btn btn-p" onclick="doSearch()">搜索</button>
+      </div>
+      <div class="ch">
+        <div>
+          {% if current_category %}<strong style="color:var(--A)">{{ current_category }}</strong> · {% endif %}
+          <span class="rc">共 <strong style="color:var(--text)">{{ pagination.total }}</strong> 个服务</span>
+        </div>
+        <select class="sort-sel" onchange="chSort(this.value)">
+          <option value="newest"    {% if sort=='newest'     %}selected{% endif %}>最新上架</option>
+          <option value="popular"   {% if sort=='popular'    %}selected{% endif %}>最受欢迎</option>
+          <option value="rating"    {% if sort=='rating'     %}selected{% endif %}>评分最高</option>
+          <option value="price_asc" {% if sort=='price_asc'  %}selected{% endif %}>价格↑</option>
+          <option value="price_desc"{% if sort=='price_desc' %}selected{% endif %}>价格↓</option>
+        </select>
+      </div>
+
+      {% if services %}
+      <div class="g3">
+        {% for s in services %}
+        <a href="/service/{{ s.id }}" class="scard">
+          <div class="scard-img">{{ cat_icons.get(s.category,'⭐') }}</div>
+          <div class="scard-body">
+            <span class="ctag">{{ s.category }}</span>
+            <div class="scard-title">{{ s.title }}</div>
+            <div class="scard-prov">
+              <div class="pav-sm">{{ s.provider.name[0] if s.provider else '?' }}</div>
+              <span class="pav-name">{{ s.provider.name if s.provider else '未知' }}</span>
+              {% if s.provider and s.provider.location %}
+              <span style="color:var(--text3);font-size:.72rem;margin-left:auto">📍{{ s.provider.location }}</span>
+              {% endif %}
+            </div>
+            <div class="scard-foot">
+              <div class="price">¥{{ "%.0f"|format(s.price) }}<span> 起</span></div>
+              <div class="stars"><span class="s">★</span>{{ "%.1f"|format(s.rating) }} ({{ s.review_count }})</div>
+            </div>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+
+      {% if pagination.pages > 1 %}
+      <div class="pg">
+        {% if pagination.has_prev %}
+        <a href="?page={{ pagination.prev_num }}&category={{ current_category }}&sort={{ sort }}&q={{ search }}" class="pgb">‹</a>
+        {% endif %}
+        {% for p in pagination.iter_pages(left_edge=2,right_edge=2,left_current=2,right_current=2) %}
+          {% if p %}<a href="?page={{ p }}&category={{ current_category }}&sort={{ sort }}&q={{ search }}" class="pgb {% if p==pagination.page %}on{% endif %}">{{ p }}</a>
+          {% else %}<span class="pgb" style="cursor:default;color:var(--text3)">…</span>{% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+        <a href="?page={{ pagination.next_num }}&category={{ current_category }}&sort={{ sort }}&q={{ search }}" class="pgb">›</a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% else %}
+      <div class="empty"><div class="ei">🔍</div><p>没有找到匹配的服务</p>
+        <a href="/services" class="btn btn-p" style="margin-top:1rem">查看全部</a></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<script>
+function chSort(v){const u=new URL(location.href);u.searchParams.set('sort',v);location.href=u}
+function doSearch(){const u=new URL(location.href);u.searchParams.set('q',document.getElementById('sb').value);u.searchParams.delete('page');location.href=u}
+document.getElementById('sb')?.addEventListener('keydown',e=>{if(e.key==='Enter')doSearch()});
+</script>
+{% endblock %}

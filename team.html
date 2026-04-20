@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}团队介绍 — SkillMarket{% endblock %}
+{% block breadcrumb_label %}团队介绍{% endblock %}
+{% block content %}
+<div class="wrap" style="max-width:860px;margin:0 auto">
+
+  <div style="text-align:center;padding:3.5rem 1.5rem 2.5rem;background:radial-gradient(ellipse 70% 50% at 50% 0%,rgba(232,93,138,.15) 0%,transparent 70%);border-radius:20px;margin-bottom:2rem;position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(circle at 20% 80%,rgba(91,141,239,.07) 0%,transparent 50%);pointer-events:none"></div>
+    <div style="font-size:3.5rem;filter:drop-shadow(0 4px 16px rgba(232,93,138,.4))">👨‍💻</div>
+    <h1 style="font-size:2.1rem;font-weight:800;margin:.75rem 0 .5rem;background:linear-gradient(120deg,var(--text),var(--B));-webkit-background-clip:text;-webkit-text-fill-color:transparent">Three Men Together</h1>
+    <p style="color:var(--text2);font-size:.95rem;max-width:480px;margin:0 auto;line-height:1.75">三人行，必有我师。我们相信协作的力量能创造超越个体的价值。</p>
+  </div>
+
+  <div style="background:linear-gradient(120deg,rgba(91,141,239,.09),rgba(232,93,138,.06));border:1px solid rgba(91,141,239,.18);border-radius:var(--r-lg);padding:2rem;margin-bottom:2rem">
+    <h3 style="font-weight:700;margin-bottom:.9rem;display:flex;align-items:center;gap:.5rem"><span style="color:var(--A)">✦</span> 关于我们的团队</h3>
+    <p style="color:var(--text2);line-height:1.9;font-size:.9rem">
+      <strong style="color:var(--A)">Three Men Together</strong> 是一个充满热情的学生创业团队，由三位志同道合的伙伴组成。我们来自不同的专业背景，
+      却因对技术与创新的共同热爱走到一起。从最初的想法碰撞，到产品原型，再到正式上线，我们用无数个日夜打磨出 SkillMarket 这个平台，
+      希望它能真正帮助那些拥有一技之长却苦于缺乏渠道的人们。
+    </p>
+    <p style="color:var(--text2);line-height:1.9;font-size:.9rem;margin-top:.75rem">
+      我们坚信：<em style="color:var(--text);font-style:normal;border-bottom:1px dashed rgba(255,255,255,.2)">每个人都有值得被看见的才能，每一份努力都应该获得合理的回报。</em>
+    </p>
+  </div>
+
+  <h3 style="font-weight:700;margin-bottom:1.25rem;text-align:center">团队成员</h3>
+  <div class="g3" style="margin-bottom:2rem">
+    {% for icon,name,role,desc,skills,color in [
+      ('🧑‍💻','成员 A','全栈开发 / 项目负责人','负责平台整体架构设计与后端开发，热衷于用代码解决现实问题。曾参与多个开源项目，对 Python/Flask 生态有深入研究。',['Python','Flask','SQLAlchemy','Linux'],'var(--A)'),
+      ('🎨','成员 B','前端开发 / UI 设计','专注于用户体验与界面设计，相信好的产品应该既好用又好看。擅长将复杂功能以简洁直观的方式呈现给用户。',['HTML/CSS','JavaScript','Bootstrap','Figma'],'var(--B)'),
+      ('📊','成员 C','产品运营 / 测试','负责产品需求分析、用户调研和平台运营，是团队与真实用户之间的桥梁。擅长发现问题并推动落地。',['产品设计','用户调研','数据分析','内容运营'],'var(--C)'),
+    ] %}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.75rem;text-align:center;transition:.25s" onmouseover="this.style.borderColor='{{ color }}';this.style.transform='translateY(-4px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='none'">
+      <div style="font-size:3rem;filter:drop-shadow(0 4px 12px rgba(0,0,0,.3))">{{ icon }}</div>
+      <h4 style="font-weight:700;margin:.65rem 0 .2rem">{{ name }}</h4>
+      <div style="font-size:.78rem;color:{{ color }};margin-bottom:.9rem;padding:.2rem .7rem;background:rgba(255,255,255,.05);border-radius:20px;display:inline-block">{{ role }}</div>
+      <p style="color:var(--text2);font-size:.82rem;line-height:1.7;margin-bottom:1rem;text-align:left">{{ desc }}</p>
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:.35rem">
+        {% for s in skills %}<span style="padding:.18rem .55rem;border-radius:20px;font-size:.7rem;background:var(--bg3);color:var(--text2);border:1px solid var(--border)">{{ s }}</span>{% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:2rem;margin-bottom:1.35rem">
+    <h4 style="font-weight:700;margin-bottom:.9rem;display:flex;align-items:center;gap:.5rem"><span style="color:var(--B)">✦</span> 我们的故事</h4>
+    <p style="color:var(--text2);line-height:1.9;font-size:.9rem">
+      SkillMarket 的灵感来源于我们自身的经历。在校期间，我们深感周围有许多同学拥有出色的技能，却不知道如何将其转化为实际收益；
+      同时，也有很多人有真实需求，却难以找到靠谱的服务者。
+    </p>
+    <p style="color:var(--text2);line-height:1.9;font-size:.9rem;margin-top:.75rem">
+      于是我们决定动手解决这个问题。从一张草图、一份需求文档出发，历经数月的开发迭代，SkillMarket 正式上线。
+      我们希望这个平台不仅是一个交易市场，更是一个充满信任与温度的社区。
+    </p>
+    <p style="color:var(--text2);line-height:1.9;font-size:.9rem;margin-top:.75rem">
+      路还很长，我们仍在持续打磨与进化。如果您有任何建议，欢迎通过
+      <a href="mailto:support@skillmarket.com" style="color:var(--A)">邮件</a> 联系我们，我们认真对待每一条反馈。
+    </p>
+  </div>
+
+  <div style="text-align:center;display:flex;gap:.75rem;justify-content:center">
+    <a href="/about" class="btn btn-s">了解平台</a>
+    <a href="/services" class="btn btn-p">🔍 浏览服务</a>
+  </div>
+</div>
+{% endblock %}

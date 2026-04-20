@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}登录 — SkillMarket{% endblock %}
+{% block breadcrumb_label %}登录{% endblock %}
+{% block head %}
+<style>
+.auth-page{min-height:calc(100vh - 110px);display:flex;align-items:center;justify-content:center;padding:2rem;
+  background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(91,141,239,.1) 0%,transparent 65%)}
+.auth-box{width:100%;max-width:430px}
+.auth-logo{text-align:center;margin-bottom:1.8rem}
+.auth-logo .aln{font-family:'DM Serif Display',serif;font-size:1.5rem;
+  background:linear-gradient(120deg,var(--A),var(--B));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.auth-logo p{color:var(--text3);font-size:.82rem;margin-top:.35rem}
+.auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:2.25rem;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.auth-card h2{font-size:1.35rem;font-weight:700;margin-bottom:.3rem}
+.auth-card .sub{color:var(--text3);font-size:.82rem;margin-bottom:1.75rem}
+.demo-box{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:.9rem;margin-bottom:1.4rem}
+.demo-box h4{font-size:.75rem;color:var(--text3);margin-bottom:.55rem;text-transform:uppercase;letter-spacing:.06em}
+.demo-row{display:flex;justify-content:space-between;align-items:center;padding:.3rem .5rem;cursor:pointer;border-radius:7px;transition:.15s}
+.demo-row:hover{background:rgba(91,141,239,.1);border-radius:7px}
+.demo-row strong{font-size:.78rem;color:var(--text)}
+.demo-row span{font-size:.75rem;color:var(--text3)}
+.auth-foot{text-align:center;margin-top:1.25rem;color:var(--text3);font-size:.82rem}
+.auth-foot a{color:var(--A);transition:.15s}
+.auth-foot a:hover{text-decoration:underline}
+</style>
+{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="aln">SkillMarket</div>
+      <p>专业技能交易平台 · Created by Three Men Together</p>
+    </div>
+    <div class="auth-card">
+      <h2>欢迎回来 👋</h2>
+      <p class="sub">登录你的账户继续</p>
+
+      <div class="demo-box">
+        <h4>🧪 点击快速填入演示账号</h4>
+        <div class="demo-row" onclick="fill('admin@skillmarket.com','admin123')">
+          <strong>👑 管理员</strong><span>admin@skillmarket.com · admin123</span>
+        </div>
+        <div class="demo-row" onclick="fill('zhang@example.com','pass123')">
+          <strong>💼 服务提供者</strong><span>zhang@example.com · pass123</span>
+        </div>
+        <div class="demo-row" onclick="fill('user1@example.com','pass123')">
+          <strong>🛍️ 普通用户</strong><span>user1@example.com · pass123</span>
+        </div>
+      </div>
+
+      <form method="POST">
+        <div class="fg">
+          <label class="fl-label">邮箱地址</label>
+          <input id="em" type="email" name="email" class="fc" placeholder="your@email.com" required>
+        </div>
+        <div class="fg">
+          <label class="fl-label">密码</label>
+          <input id="pw" type="password" name="password" class="fc" placeholder="输入密码" required>
+        </div>
+        <button type="submit" class="btn btn-p btn-w btn-lg">登 录</button>
+      </form>
+      <div class="auth-foot">还没有账户？<a href="/register">立即免费注册</a></div>
+    </div>
+  </div>
+</div>
+<script>
+function fill(e,p){document.getElementById('em').value=e;document.getElementById('pw').value=p;}
+</script>
+{% endblock %}

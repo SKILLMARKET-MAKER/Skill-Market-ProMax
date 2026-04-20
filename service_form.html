@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}{{ '编辑服务' if service else '发布新服务' }} — SkillMarket{% endblock %}
+{% block breadcrumb %}
+  <a href="/provider/dashboard">服务后台</a>
+  <span class="bread-sep">›</span>
+  <span style="color:var(--text2)">{{ '编辑服务' if service else '发布新服务' }}</span>
+{% endblock %}
+{% block content %}
+<div class="wrap" style="max-width:660px;margin:0 auto">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:2rem;box-shadow:var(--shadow-sm)">
+    <h1 style="font-size:1.3rem;font-weight:700;margin-bottom:1.6rem">{{ '✏️ 编辑服务' if service else '🚀 发布新服务' }}</h1>
+    <form method="POST">
+      <div style="font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.9rem;display:flex;align-items:center;gap:.5rem"><span style="color:var(--A)">●</span> 基本信息</div>
+      <div class="fg"><label class="fl-label">服务标题 *</label><input type="text" name="title" class="fc" required value="{{ service.title if service else '' }}" placeholder="例如：专业UI设计服务"></div>
+      <div class="fg">
+        <label class="fl-label">服务分类 *</label>
+        <select name="category" class="fc" required>
+          <option value="">— 选择分类 —</option>
+          {% for c in categories %}<option value="{{ c }}" {% if service and service.category==c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="fg"><label class="fl-label">服务描述 *</label><textarea name="description" class="fc" rows="5" required placeholder="详细描述服务内容、交付物、适用场景…">{{ service.description if service else '' }}</textarea></div>
+
+      <div style="font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.9rem;margin-top:1.35rem;display:flex;align-items:center;gap:.5rem"><span style="color:var(--B)">●</span> 💰 价格设置</div>
+      <div class="fg">
+        <label class="fl-label">计价模式 *</label>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;margin-bottom:.9rem">
+          {% for val,label,desc in [('fixed','固定价格','一口价，买家直接下单'),('hourly','按小时计费','买家选择购买时长'),('negotiable','可协商','设定参考价，双方协商')] %}
+          <label style="border:1px solid var(--border);border-radius:10px;padding:.85rem .7rem;cursor:pointer;text-align:center;transition:.25s" id="ptl_{{ val }}">
+            <input type="radio" name="price_type" value="{{ val }}" class="pt-r" style="display:none"
+              {% if (service and service.price_type==val) or (not service and val=='fixed') %}checked{% endif %}>
+            <div style="font-weight:600;font-size:.88rem">{{ label }}</div>
+            <div style="font-size:.72rem;color:var(--text3);margin-top:.2rem">{{ desc }}</div>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl-label" id="priceLabel">固定价格（元）*</label>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span style="color:var(--text3)">¥</span>
+          <input type="number" name="price" class="fc" required min="1" step="0.01" value="{{ service.price if service else '' }}" placeholder="0.00" style="flex:1">
+          <span id="perHour" style="color:var(--text3);font-size:.85rem;display:none">/小时</span>
+        </div>
+      </div>
+      <div id="priceRange" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.65rem">
+          <div class="fg"><label class="fl-label">最低参考价（元）</label><input type="number" name="price_min" class="fc" min="0" step="0.01" value="{{ service.price_min if service else 0 }}"></div>
+          <div class="fg"><label class="fl-label">最高参考价（元）</label><input type="number" name="price_max" class="fc" min="0" step="0.01" value="{{ service.price_max if service else 0 }}"></div>
+        </div>
+        <p style="font-size:.78rem;color:var(--text3);margin-bottom:.9rem">💡 可协商模式下买家通过消息沟通后再下单</p>
+      </div>
+
+      <div style="font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.9rem;margin-top:1.35rem;display:flex;align-items:center;gap:.5rem"><span style="color:var(--C)">●</span> 📌 服务流程与交付</div>
+      <div class="fg"><label class="fl-label">预计交付时间</label><input type="text" name="delivery_time" class="fc" value="{{ service.delivery_time if service else '' }}" placeholder="例如：3个工作日、1周"></div>
+      <div class="fg">
+        <label class="fl-label">服务步骤（每行一步，买家可在订单中追踪进度）</label>
+        <textarea name="service_steps" class="fc" rows="6" placeholder="需求沟通与确认&#10;方案设计/草稿&#10;修改与完善&#10;最终交付">{{ service.service_steps if service else '' }}</textarea>
+        <span style="font-size:.72rem;color:var(--text3)">每行一个步骤，支持2~10步</span>
+      </div>
+      {% if service %}
+      <div class="fg">
+        <label style="display:flex;align-items:center;gap:.55rem;cursor:pointer">
+          <input type="checkbox" name="is_active" {% if service.is_active %}checked{% endif %} style="width:16px;height:16px;accent-color:var(--A)">
+          <span class="fl-label" style="margin:0">服务上架中（取消则下架）</span>
+        </label>
+      </div>
+      {% endif %}
+      <div style="display:flex;gap:.65rem;margin-top:.5rem">
+        <button type="submit" class="btn btn-p btn-lg">{{ '💾 保存修改' if service else '🚀 发布服务' }}</button>
+        <a href="/provider/dashboard" class="btn btn-s btn-lg">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const radios=document.querySelectorAll('.pt-r');
+function updateUI(){
+  const val=document.querySelector('.pt-r:checked')?.value||'fixed';
+  ['fixed','hourly','negotiable'].forEach(k=>{
+    const el=document.getElementById('ptl_'+k);
+    el.style.borderColor=k===val?'var(--A)':'var(--border)';
+    el.style.background=k===val?'rgba(91,141,239,.1)':'transparent';
+    el.style.boxShadow=k===val?'0 0 0 3px var(--glow-a)':'none';
+  });
+  document.getElementById('priceLabel').textContent=val==='hourly'?'时薪（元/小时）*':val==='negotiable'?'参考基准价（元）*':'固定价格（元）*';
+  document.getElementById('perHour').style.display=val==='hourly'?'inline':'none';
+  document.getElementById('priceRange').style.display=val==='negotiable'?'block':'none';
+}
+radios.forEach(r=>r.addEventListener('change',updateUI));
+updateUI();
+</script>
+{% endblock %}

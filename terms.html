@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}服务条款 — SkillMarket{% endblock %}
+{% block breadcrumb_label %}服务条款{% endblock %}
+{% block content %}
+<div class="wrap" style="max-width:800px;margin:0 auto">
+  <div style="margin-bottom:1.75rem">
+    <h1 style="font-size:1.65rem;font-weight:700;margin-bottom:.3rem">服务条款</h1>
+    <p style="color:var(--text3);font-size:.82rem">最后更新：2026年1月1日</p>
+  </div>
+  <div style="background:rgba(91,141,239,.08);border:1px solid rgba(91,141,239,.2);border-radius:10px;padding:.9rem 1.1rem;margin-bottom:1.75rem;font-size:.86rem;color:var(--text2);display:flex;align-items:flex-start;gap:.65rem">
+    <span style="flex-shrink:0;font-size:1rem">ℹ️</span>
+    <span>请在使用 SkillMarket 平台前仔细阅读本条款。注册或使用本平台即表示您同意受本条款约束。</span>
+  </div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:2rem">
+    {% for title,content in [
+      ('1. 平台定义与服务范围','SkillMarket 是由 Three Men Together 团队运营的技能共享交易平台，为服务提供者与用户提供信息展示、在线沟通、交易撮合等服务。平台本身不直接提供任何具体服务，而是作为中介连接双方。'),
+      ('2. 账户注册与安全','用户须提供真实、准确的注册信息。您有责任保护账户密码安全，因密码泄露导致的任何损失由用户自行承担。发现账户被盗用时，请立即联系平台客服。平台有权暂停或终止违规账户。'),
+      ('3. 服务者资质与内容规范','服务者发布的服务信息须真实准确，不得虚假宣传或夸大服务能力。服务内容不得包含违法、违规或侵犯他人权益的内容。平台有权审核并删除不符合规范的服务。'),
+      ('4. 交易规则与资金安全','买家在下单支付后，资金由平台暂存。服务完成并经买家确认验收后，款项将结算给服务者。平台提供举报机制，用于处理违规交易。'),
+      ('5. 纠纷处理','若买卖双方发生纠纷，应首先尝试通过平台会话协商解决。协商不成可向平台申请仲裁，平台将依据订单记录、沟通记录等作出裁定，裁定结果为最终决定。'),
+      ('6. 禁止行为','禁止绕过平台私下交易；禁止刷单、刷评；禁止骚扰、威胁其他用户；禁止发布违法内容；禁止盗用他人账户。违者平台有权封号并追究相关责任。'),
+      ('7. 免责声明','平台对服务者的服务质量不作担保。因不可抗力、网络故障等导致的服务中断，平台不承担赔偿责任。用户应自行判断服务是否满足需求。'),
+      ('8. 条款修改','平台有权随时修改本条款，修改后将在网站公告。继续使用平台视为接受新条款。如有疑问请联系 support@skillmarket.com。'),
+    ] %}
+    <div style="border-bottom:1px solid var(--border);padding:1.25rem 0">
+      <h4 style="font-weight:600;margin-bottom:.5rem;color:var(--text)">{{ title }}</h4>
+      <p style="color:var(--text2);line-height:1.85;font-size:.88rem">{{ content }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
