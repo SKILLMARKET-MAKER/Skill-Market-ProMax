@@ -49,13 +49,12 @@ class Service(db.Model):
     provider_id = db.Column(db.Integer, db.ForeignKey('providers.id'))
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    # 价格模式: fixed=固定 hourly=按小时 negotiable=可协商
     price_type = db.Column(db.String(20), default='fixed')
     price = db.Column(db.Float, nullable=False)
     price_min = db.Column(db.Float, default=0)
     price_max = db.Column(db.Float, default=0)
     delivery_time = db.Column(db.String(100), default='')
-    service_steps = db.Column(db.Text, default='')  # 换行分隔
+    service_steps = db.Column(db.Text, default='')
     category = db.Column(db.String(50), nullable=False)
     rating = db.Column(db.Float, default=5.0)
     review_count = db.Column(db.Integer, default=0)
@@ -70,12 +69,16 @@ class Order(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     service_id = db.Column(db.Integer, db.ForeignKey('services.id'))
     provider_id = db.Column(db.Integer, db.ForeignKey('providers.id'))
-    # pending → paid → in_progress → delivered → completed | cancelled
     status = db.Column(db.String(20), default='pending')
     current_step = db.Column(db.Integer, default=0)
     price = db.Column(db.Float)
     hours = db.Column(db.Float, default=1)
     note = db.Column(db.Text, default='')
+    # ── 新增：交付物字段 ──────────────────────────────────
+    deliver_note = db.Column(db.Text, default='')   # 卖家填写的交付说明
+    deliver_link = db.Column(db.String(500), default='')  # 交付链接（可选）
+    delivered_at = db.Column(db.DateTime, nullable=True)  # 交付时间
+    # ─────────────────────────────────────────────────────
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     payment = db.relationship('Payment', backref='order', uselist=False)
@@ -95,6 +98,7 @@ class Review(db.Model):
     __tablename__ = 'reviews'
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), unique=True)
+    service_id = db.Column(db.Integer, db.ForeignKey('services.id'), nullable=True)  # ── 新增：关联服务
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     provider_id = db.Column(db.Integer, db.ForeignKey('providers.id'))
     rating = db.Column(db.Integer, nullable=False)
@@ -102,7 +106,6 @@ class Review(db.Model):
     tags = db.Column(db.String(200), default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# ── 新增：站内消息 ──
 class Message(db.Model):
     __tablename__ = 'messages'
     id = db.Column(db.Integer, primary_key=True)
@@ -114,16 +117,15 @@ class Message(db.Model):
     sender   = db.relationship('User', foreign_keys=[sender_id],   backref='sent_messages')
     receiver = db.relationship('User', foreign_keys=[receiver_id], backref='received_messages')
 
-# ── 新增：举报 ──
 class Report(db.Model):
     __tablename__ = 'reports'
     id = db.Column(db.Integer, primary_key=True)
     reporter_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    target_type = db.Column(db.String(20), nullable=False)  # provider/service/order
+    target_type = db.Column(db.String(20), nullable=False)
     target_id   = db.Column(db.Integer, nullable=False)
     reason  = db.Column(db.String(100), nullable=False)
     detail  = db.Column(db.Text, default='')
-    status  = db.Column(db.String(20), default='pending')   # pending/handled/dismissed
+    status  = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     reporter = db.relationship('User', backref='reports')
 
@@ -245,11 +247,17 @@ def services():
         categories=CATEGORIES, cat_icons=CAT_ICONS,
         current_category=category, sort=sort, search=search)
 
+# ── 修复：评价查询改为按 service_id，与 review_count 保持一致 ──────────────
 @app.route('/service/<int:sid>')
 def service_detail(sid):
     service = Service.query.get_or_404(sid)
-    reviews = Review.query.filter_by(provider_id=service.provider_id)\
+    # 按服务 id 查评价，这样数量与 service.review_count 始终匹配
+    reviews = Review.query.filter_by(service_id=sid)\
                           .order_by(Review.created_at.desc()).limit(10).all()
+    # 旧数据兼容：若 service_id 字段为空（旧评价），回退到 provider 查询
+    if not reviews:
+        reviews = Review.query.filter_by(provider_id=service.provider_id)\
+                              .order_by(Review.created_at.desc()).limit(10).all()
     similar = Service.query.filter_by(category=service.category, is_active=True)\
                            .filter(Service.id != sid).limit(4).all()
     steps = [s.strip() for s in service.service_steps.split('\n') if s.strip()] \
@@ -339,6 +347,7 @@ def update_step(oid):
         db.session.commit()
     return jsonify({'ok':True,'current_step':order.current_step})
 
+# ── 修复：deliver 接口保存 note 和 link ──────────────────────────────────
 @app.route('/order/<int:oid>/deliver', methods=['POST'])
 @login_required
 def deliver_order(oid):
@@ -348,9 +357,17 @@ def deliver_order(oid):
         return jsonify({'ok':False,'msg':'无权操作'}), 403
     if order.status != 'in_progress':
         return jsonify({'ok':False,'msg':'当前状态不允许交付'})
-    order.status = 'delivered'; order.updated_at = datetime.utcnow()
+    deliver_note = request.form.get('note','').strip()
+    deliver_link = request.form.get('link','').strip()
+    if not deliver_note:
+        return jsonify({'ok':False,'msg':'请填写交付说明'})
+    order.status       = 'delivered'
+    order.deliver_note = deliver_note
+    order.deliver_link = deliver_link
+    order.delivered_at = datetime.utcnow()
+    order.updated_at   = datetime.utcnow()
     db.session.commit()
-    return jsonify({'ok':True,'msg':'已提交交付，等待买家验收'})
+    return jsonify({'ok':True,'msg':'已提交交付，等待买家验收 📬'})
 
 @app.route('/order/<int:oid>/complete', methods=['POST'])
 @login_required
@@ -363,7 +380,7 @@ def complete_order(oid):
         return jsonify({'ok':False,'msg':'无权操作'}), 403
     order.status = 'completed'; order.updated_at = datetime.utcnow()
     db.session.commit()
-    return jsonify({'ok':True,'msg':'订单已完成！'})
+    return jsonify({'ok':True,'msg':'订单已完成！感谢使用 SkillMarket 🎉'})
 
 @app.route('/order/<int:oid>/cancel', methods=['POST'])
 @login_required
@@ -377,6 +394,7 @@ def cancel_order(oid):
     db.session.commit()
     return jsonify({'ok':True,'msg':'订单已取消'})
 
+# ── 修复：评价时同时写入 service_id，保证 service_detail 查询匹配 ────────
 @app.route('/order/<int:oid>/review', methods=['POST'])
 @login_required
 def add_review(oid):
@@ -390,16 +408,28 @@ def add_review(oid):
     rating  = int(request.form.get('rating', 5))
     comment = request.form.get('comment','')
     tags    = ','.join(request.form.getlist('tags'))
-    rev = Review(order_id=order.id, user_id=current_user.id,
-                 provider_id=order.provider_id, rating=rating,
-                 comment=comment, tags=tags)
+    rev = Review(
+        order_id=order.id,
+        service_id=order.service_id,   # ← 新增：写入服务 id
+        user_id=current_user.id,
+        provider_id=order.provider_id,
+        rating=rating,
+        comment=comment,
+        tags=tags
+    )
     db.session.add(rev)
-    all_revs = Review.query.filter_by(provider_id=order.provider_id).all() + [rev]
-    avg = round(sum(r.rating for r in all_revs) / len(all_revs), 1)
+    # 重新统计该服务的评分（只算该服务的评价）
     svc = Service.query.get(order.service_id)
-    if svc: svc.rating = avg; svc.review_count = len(all_revs)
+    if svc:
+        all_revs = Review.query.filter_by(service_id=order.service_id).all() + [rev]
+        avg = round(sum(r.rating for r in all_revs) / len(all_revs), 1)
+        svc.rating       = avg
+        svc.review_count = len(all_revs)   # ← 与 service_detail 查询数量一致
+    # 同步更新 provider 总评分
     prov = Provider.query.get(order.provider_id)
-    if prov: prov.rating = avg
+    if prov:
+        prov_revs = Review.query.filter_by(provider_id=order.provider_id).all() + [rev]
+        prov.rating = round(sum(r.rating for r in prov_revs) / len(prov_revs), 1)
     db.session.commit()
     flash('评价已提交，感谢反馈！⭐', 'success')
     return redirect(url_for('order_detail', oid=oid))
@@ -441,7 +471,7 @@ def edit_profile():
     flash('资料已更新', 'success')
     return redirect(url_for('profile'))
 
-# ══ 消息 / 会话 ══
+# ══ 消息 / 会话 ══════════════════════════════════════════════════════
 
 @app.route('/messages')
 @login_required
@@ -462,18 +492,21 @@ def messages():
     total_unread = Message.query.filter_by(receiver_id=current_user.id, is_read=False).count()
     return render_template('messages.html', contacts=info, total_unread=total_unread)
 
+# ── 修复：POST 返回消息 id；GET 渲染 conversation.html ─────────────────
 @app.route('/messages/<int:uid>', methods=['GET','POST'])
 @login_required
 def conversation(uid):
     target = User.query.get_or_404(uid)
     if request.method == 'POST':
         content = request.form.get('content','').strip()
-        if content:
-            db.session.add(Message(sender_id=current_user.id, receiver_id=uid, content=content))
-            db.session.commit()
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({'ok':True})
-        return redirect(url_for('conversation', uid=uid))
+        if not content:
+            return jsonify({'ok':False,'msg':'消息不能为空'})
+        msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
+        db.session.add(msg)
+        db.session.commit()
+        # ── 关键修复：返回消息 id，前端用来更新 lastId 防止轮询重复 ──
+        return jsonify({'ok':True, 'id': msg.id})
+    # GET：标记已读，返回页面
     Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
                  .update({'is_read':True})
     db.session.commit()
@@ -483,18 +516,27 @@ def conversation(uid):
     ).order_by(Message.created_at.asc()).all()
     return render_template('conversation.html', target=target, messages=msgs)
 
-@app.route('/api/messages/<int:uid>/new')
+# ── 修复：轮询接口路径改为 /poll（与前端 conversation.html 一致）──────────
+# 原来是 /api/messages/<uid>/new → 现在统一为 /api/messages/<uid>/poll
+@app.route('/api/messages/<int:uid>/poll')
 @login_required
-def api_new_messages(uid):
+def api_poll_messages(uid):
     since = request.args.get('since', type=int, default=0)
     msgs  = Message.query.filter(
-        Message.sender_id==uid, Message.receiver_id==current_user.id,
+        Message.sender_id==uid,
+        Message.receiver_id==current_user.id,
         Message.id > since
     ).order_by(Message.created_at.asc()).all()
-    for m in msgs: m.is_read = True
+    for m in msgs:
+        m.is_read = True
     db.session.commit()
-    return jsonify([{'id':m.id,'content':m.content,'sender_id':m.sender_id,
-                     'created_at':m.created_at.strftime('%H:%M')} for m in msgs])
+    return jsonify([{
+        'id':         m.id,
+        'content':    m.content,
+        'sender_id':  m.sender_id,
+        # ── 返回 UTC ISO 字符串，前端负责转本地时区显示 ──
+        'created_at': m.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+    } for m in msgs])
 
 # ══ 举报 ══
 
