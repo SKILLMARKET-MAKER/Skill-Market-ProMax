@@ -2,6 +2,7 @@
 {% block title %}SkillMarket — 专业技能交易平台{% endblock %}
 {% block head %}
 <style>
+/* ===== 英雄区 ===== */
 .hero{position:relative;overflow:hidden;padding:5rem 1.5rem 3.5rem;text-align:center;
   background:radial-gradient(ellipse 80% 55% at 50% -5%,rgba(91,141,239,.2) 0%,transparent 70%)}
 .hero::before{content:'';position:absolute;inset:0;
@@ -21,7 +22,16 @@
 .hs-l{font-size:.75rem;color:var(--text3);margin-top:.15rem}
 @keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 
-/* 分类 */
+/* ===== 搜索栏 ===== */
+.hero-search{max-width:560px;margin:0 auto 2.2rem;animation:up .6s .18s both}
+.hero-search-box{display:flex;background:rgba(255,255,255,.07);border:1px solid rgba(91,141,239,.3);
+  border-radius:50px;overflow:hidden;padding:.25rem .25rem .25rem 1.2rem}
+.hero-search-box input{flex:1;background:none;border:none;outline:none;color:var(--text1);font-size:.95rem;padding:.45rem 0}
+.hero-search-box input::placeholder{color:var(--text3)}
+.hero-search-box button{background:linear-gradient(120deg,var(--A),var(--B));color:#fff;border:none;
+  border-radius:40px;padding:.5rem 1.3rem;font-size:.88rem;font-weight:600;cursor:pointer;white-space:nowrap}
+
+/* ===== 分类 ===== */
 .cat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:.9rem}
 @media(max-width:900px){.cat-row{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:580px){.cat-row{grid-template-columns:repeat(3,1fr)}}
@@ -31,28 +41,77 @@
 .cat-card .ci{font-size:1.65rem}
 .cat-card .cn{font-size:.8rem;font-weight:500}
 
-/* 促销横幅 */
+/* ===== 流程步骤 ===== */
+.steps-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1.2rem}
+@media(max-width:700px){.steps-row{grid-template-columns:repeat(2,1fr)}}
+.step-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  padding:1.5rem 1.2rem;text-align:center;position:relative}
+.step-num{position:absolute;top:.8rem;right:.9rem;font-size:.72rem;font-weight:700;
+  color:var(--A);opacity:.5}
+.step-icon{font-size:2rem;margin-bottom:.7rem}
+.step-title{font-size:.92rem;font-weight:700;margin-bottom:.4rem}
+.step-desc{font-size:.78rem;color:var(--text2);line-height:1.6}
+
+/* ===== 信任背书 ===== */
+.trust-row{display:flex;gap:1.5rem;flex-wrap:wrap;justify-content:center}
+.trust-item{display:flex;align-items:center;gap:.5rem;background:var(--card);
+  border:1px solid var(--border);border-radius:40px;padding:.55rem 1.1rem;font-size:.82rem;font-weight:500}
+.trust-item span{font-size:1rem}
+
+/* ===== 入驻横幅（仅未登录） ===== */
 .promo{background:linear-gradient(120deg,rgba(91,141,239,.12),rgba(232,93,138,.08));
   border:1px solid rgba(91,141,239,.2);border-radius:20px;padding:2.25rem;
   display:flex;align-items:center;gap:2rem;margin-bottom:2.8rem}
 .promo-txt h2{font-size:1.35rem;font-weight:700;margin-bottom:.45rem}
 .promo-txt p{color:var(--text2);font-size:.86rem;line-height:1.65}
-.promo-btns{margin-top:.9rem;display:flex;gap:.65rem}
+.promo-btn-wrap{margin-top:.9rem}
 .promo-vis{margin-left:auto;font-size:3.5rem;flex-shrink:0}
+@media(max-width:600px){.promo{flex-direction:column}.promo-vis{display:none}}
+
+/* ===== FAQ ===== */
+.faq-list{display:flex;flex-direction:column;gap:.7rem;max-width:720px;margin:0 auto}
+.faq-item{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.faq-q{padding:1rem 1.2rem;font-weight:600;font-size:.92rem;cursor:pointer;
+  display:flex;justify-content:space-between;align-items:center;user-select:none}
+.faq-q .arr{transition:.3s;color:var(--A);font-size:.85rem}
+.faq-item.open .arr{transform:rotate(180deg)}
+.faq-a{display:none;padding:0 1.2rem 1rem;color:var(--text2);font-size:.86rem;line-height:1.75}
+.faq-item.open .faq-a{display:block}
+
+/* ===== 评价展示 ===== */
+.reviews-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem}
+@media(max-width:700px){.reviews-row{grid-template-columns:1fr}}
+.rv-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.3rem}
+.rv-stars{color:#f5c518;font-size:.9rem;margin-bottom:.6rem}
+.rv-text{font-size:.84rem;color:var(--text2);line-height:1.7;margin-bottom:.9rem}
+.rv-user{display:flex;align-items:center;gap:.6rem}
+.rv-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--A),var(--B));
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:.8rem;font-weight:700}
+.rv-name{font-size:.82rem;font-weight:600}
+.rv-svc{font-size:.74rem;color:var(--text3)}
 </style>
 {% endblock %}
+
 {% block content %}
-<!-- 英雄区 -->
+<!-- ===== 英雄区 ===== -->
 <div class="hero">
   <div class="hero-tag">✨ 专业技能 · 真实交付 · 快速响应</div>
   <h1>找到你需要的<br><em>任何专业技能</em></h1>
   <p class="hero-sub">连接数千名专业技能提供者，无论设计、开发、翻译还是营销，在这里都能找到最合适的人。</p>
-  <div class="hero-btns">
-    <a href="/services" class="btn btn-p btn-lg">🔍 浏览所有服务</a>
-    {% if not current_user.is_authenticated %}
-    <a href="/register" class="btn btn-s btn-lg">成为服务提供者 →</a>
-    {% endif %}
+
+  <!-- 搜索框 -->
+  <div class="hero-search">
+    <form class="hero-search-box" action="/services" method="get">
+      <input type="text" name="q" placeholder="搜索你需要的服务，如「Logo设计」「视频剪辑」...">
+      <button type="submit">🔍 搜索</button>
+    </form>
   </div>
+
+  <!-- 只保留一个主按钮，去掉重复的注册入口 -->
+  <div class="hero-btns">
+    <a href="/services" class="btn btn-p btn-lg">浏览所有服务</a>
+  </div>
+
   <div class="hero-stats">
     <div class="hs-item"><div class="hs-n">{{ stats.services }}+</div><div class="hs-l">在售服务</div></div>
     <div class="hs-item"><div class="hs-n">{{ stats.providers }}+</div><div class="hs-l">专业提供者</div></div>
@@ -61,7 +120,19 @@
 </div>
 
 <div class="wrap">
-  <!-- 分类 -->
+
+  <!-- ===== 信任背书 ===== -->
+  <div class="sec" style="padding-top:1rem">
+    <div class="trust-row">
+      <div class="trust-item"><span>✅</span> 真实认证提供者</div>
+      <div class="trust-item"><span>🔒</span> 资金安全托管</div>
+      <div class="trust-item"><span>💬</span> 交付前免费沟通</div>
+      <div class="trust-item"><span>⭐</span> 真实买家评价</div>
+      <div class="trust-item"><span>🔄</span> 不满意可申诉</div>
+    </div>
+  </div>
+
+  <!-- ===== 服务分类 ===== -->
   <div class="sec">
     <div class="sec-hd"><h2 class="sec-title">服务<span>分类</span></h2><a href="/services" class="sec-link">全部 →</a></div>
     <div class="cat-row">
@@ -73,22 +144,7 @@
     </div>
   </div>
 
-  <!-- 促销 -->
-  {% if not current_user.is_authenticated %}
-  <div class="promo">
-    <div class="promo-txt">
-      <h2>有一技之长？在这里变现！</h2>
-      <p>注册成为服务提供者，发布你的专业服务，立即开始接单赚钱。<br>零门槛起步，平台护航，你专注做服务，其余交给我们。</p>
-      <div class="promo-btns">
-        <a href="/register" class="btn btn-p">立即入驻</a>
-        <a href="/services" class="btn btn-s">先浏览看看</a>
-      </div>
-    </div>
-    <div class="promo-vis">🚀</div>
-  </div>
-  {% endif %}
-
-  <!-- 热门服务 -->
+  <!-- ===== 热门服务 ===== -->
   <div class="sec">
     <div class="sec-hd"><h2 class="sec-title">🔥 热门<span>服务</span></h2><a href="/services?sort=popular" class="sec-link">查看更多 →</a></div>
     <div class="g4">
@@ -112,7 +168,26 @@
     </div>
   </div>
 
-  <!-- 高评分 -->
+  <!-- ===== 如何使用 ===== -->
+  <div class="sec">
+    <div class="sec-hd"><h2 class="sec-title">🚀 如何<span>开始</span></h2></div>
+    <div class="steps-row">
+      <div class="step-card"><div class="step-num">01</div><div class="step-icon">🔍</div>
+        <div class="step-title">搜索服务</div>
+        <div class="step-desc">输入关键词或按分类浏览，找到你需要的专业服务。</div></div>
+      <div class="step-card"><div class="step-num">02</div><div class="step-icon">💬</div>
+        <div class="step-title">联系提供者</div>
+        <div class="step-desc">在线沟通需求细节，确认方案和交付时间。</div></div>
+      <div class="step-card"><div class="step-num">03</div><div class="step-icon">💳</div>
+        <div class="step-title">安全下单</div>
+        <div class="step-desc">资金托管平台，交付满意后再放款，全程有保障。</div></div>
+      <div class="step-card"><div class="step-num">04</div><div class="step-icon">🎉</div>
+        <div class="step-title">确认收货</div>
+        <div class="step-desc">验收成果，给出评价，帮助更多人找到好服务。</div></div>
+    </div>
+  </div>
+
+  <!-- ===== 高评分推荐 ===== -->
   <div class="sec">
     <div class="sec-hd"><h2 class="sec-title">⭐ 高评分<span>推荐</span></h2><a href="/services?sort=rating" class="sec-link">查看更多 →</a></div>
     <div class="g4">
@@ -136,7 +211,29 @@
     </div>
   </div>
 
-  <!-- 最新上架 -->
+  <!-- ===== 用户评价 ===== -->
+  <div class="sec">
+    <div class="sec-hd"><h2 class="sec-title">💬 买家<span>好评</span></h2></div>
+    <div class="reviews-row">
+      <div class="rv-card">
+        <div class="rv-stars">★★★★★</div>
+        <div class="rv-text">设计师非常专业，沟通顺畅，Logo 完全符合我的预期，超出想象！</div>
+        <div class="rv-user"><div class="rv-av">王</div><div><div class="rv-name">王小明</div><div class="rv-svc">Logo设计服务</div></div></div>
+      </div>
+      <div class="rv-card">
+        <div class="rv-stars">★★★★★</div>
+        <div class="rv-text">代码质量很高，按时交付，遇到问题也耐心解答，下次还会找他。</div>
+        <div class="rv-user"><div class="rv-av">李</div><div><div class="rv-name">李晓华</div><div class="rv-svc">网站开发服务</div></div></div>
+      </div>
+      <div class="rv-card">
+        <div class="rv-stars">★★★★☆</div>
+        <div class="rv-text">翻译质量非常好，语言自然流畅，交付速度也很快，值得推荐。</div>
+        <div class="rv-user"><div class="rv-av">张</div><div><div class="rv-name">张雨晴</div><div class="rv-svc">英文翻译服务</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 最新上架 ===== -->
   <div class="sec">
     <div class="sec-hd"><h2 class="sec-title">🆕 最新<span>上架</span></h2><a href="/services?sort=newest" class="sec-link">查看更多 →</a></div>
     <div class="g4">
@@ -159,5 +256,52 @@
       {% endfor %}
     </div>
   </div>
+
+  <!-- ===== 入驻横幅（仅未登录，只出现一次） ===== -->
+  {% if not current_user.is_authenticated %}
+  <div class="promo">
+    <div class="promo-txt">
+      <h2>有一技之长？在这里变现！</h2>
+      <p>注册成为服务提供者，发布你的专业服务，立即开始接单赚钱。<br>零门槛起步，平台护航，你专注做服务，其余交给我们。</p>
+      <div class="promo-btn-wrap">
+        <a href="/register" class="btn btn-p">立即免费入驻 →</a>
+      </div>
+    </div>
+    <div class="promo-vis">🚀</div>
+  </div>
+  {% endif %}
+
+  <!-- ===== 常见问题 ===== -->
+  <div class="sec">
+    <div class="sec-hd"><h2 class="sec-title">❓ 常见<span>问题</span></h2></div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q">如何保证服务质量？<span class="arr">▼</span></div>
+        <div class="faq-a">所有提供者均经过实名认证，平台对评价真实性进行审核，并提供申诉机制，交付不满意可发起退款流程。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">付款安全吗？<span class="arr">▼</span></div>
+        <div class="faq-a">平台采用资金托管机制，你的付款在服务完成并确认收货前不会打给提供者，保障你的资金安全。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">如何成为服务提供者？<span class="arr">▼</span></div>
+        <div class="faq-a">注册账号后，在个人中心完成实名认证，然后即可发布服务。整个过程完全免费，无任何门槛。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">如果对交付结果不满意怎么办？<span class="arr">▼</span></div>
+        <div class="faq-a">你可以与提供者协商修改，或向平台申请介入调解。如最终无法达成一致，平台将按规则处理退款。</div>
+      </div>
+    </div>
+  </div>
+
 </div>
+
+<script>
+// FAQ 展开/收起
+document.querySelectorAll('.faq-q').forEach(q => {
+  q.addEventListener('click', () => {
+    q.closest('.faq-item').classList.toggle('open');
+  });
+});
+</script>
 {% endblock %}
