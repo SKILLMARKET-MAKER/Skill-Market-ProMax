@@ -49,10 +49,7 @@
           {{ (current_user.username if me else target.username)[0].upper() }}
         </div>
         <div>
-          {{/*
-            核心修复：不用 strftime 在服务端格式化时间（服务端时区≠用户时区）。
-            把 UTC 时间以 ISO 格式存入 data-utc，由浏览器 JS 按本地时区渲染。
-          */}}
+          {# 核心修复：不用 strftime 在服务端格式化时间（服务端时区≠用户时区）。把 UTC 时间以 ISO 格式存入 data-utc，由浏览器 JS 按本地时区渲染。 #}
           <div class="msg-time" style="{{ 'text-align:right' if me }}"
                data-utc="{{ m.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}"></div>
           <div class="bubble {{ 'me' if me else 'them' }}">{{ m.content }}</div>
