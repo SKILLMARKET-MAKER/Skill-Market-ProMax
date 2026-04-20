@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}帮助中心 — SkillMarket{% endblock %}
+{% block breadcrumb_label %}帮助中心{% endblock %}
+{% block content %}
+<div class="wrap" style="max-width:860px;margin:0 auto">
+
+  <div style="text-align:center;margin-bottom:2.5rem;padding:2.5rem 1rem;background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(62,207,170,.12) 0%,transparent 70%);border-radius:20px">
+    <div style="font-size:2.8rem;filter:drop-shadow(0 4px 16px rgba(62,207,170,.35))">❓</div>
+    <h1 style="font-size:1.85rem;font-weight:700;margin:.6rem 0 .35rem">帮助中心</h1>
+    <p style="color:var(--text2);font-size:.9rem">常见问题解答，快速找到您需要的帮助</p>
+  </div>
+
+  <div class="g2" style="margin-bottom:2rem">
+    {% for icon,title,desc,color in [('🛒','如何购买服务','浏览服务大厅 → 选择服务 → 下单 → 支付 → 等待服务','var(--A)'),('💼','如何成为服务者','注册时选择「服务提供者」角色，进入服务后台发布您的服务','var(--C)'),('💬','如何联系对方','在服务详情页点击「联系服务者」，或在订单页点击「联系」','var(--B)'),('🚩','如何举报违规','在服务详情页或订单页底部，点击举报按钮并选择原因','#f5c542')] %}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;transition:.25s" onmouseover="this.style.borderColor='{{ color }}';this.style.transform='translateY(-3px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='none'">
+      <div style="font-size:1.9rem;margin-bottom:.55rem">{{ icon }}</div>
+      <h4 style="font-weight:600;margin-bottom:.4rem">{{ title }}</h4>
+      <p style="color:var(--text3);font-size:.82rem;line-height:1.65">{{ desc }}</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <h3 style="font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem"><span style="color:var(--A)">✦</span> 常见问题 FAQ</h3>
+  <div style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:2rem">
+    {% for q,a in [
+      ('按小时计费的服务如何下单？','在服务详情页点击「立即下单」，弹窗中可选择购买小时数，系统自动计算总价。'),
+      ('价格标注「可协商」是什么意思？','表示服务者愿意根据您的具体需求灵活定价。建议先点「联系服务者」沟通需求，双方确认价格后再下单。'),
+      ('如何查看服务进展？','在订单详情页可看到实时服务进度条，服务者会在每个步骤完成后标记进度。'),
+      ('服务完成后发现不满意怎么办？','请先与服务者沟通要求修改。若协商无果，可在订单页点击举报按钮，平台将介入处理。确认验收前请仔细检查交付物。'),
+      ('如何评价服务？','订单状态为「已完成」后，在订单详情页可看到评价区域，支持星级评分、快捷标签和文字评价三种方式。'),
+      ('信息安全吗？','我们对密码进行加密存储，不会向第三方出售您的信息。详情请查看隐私政策。'),
+      ('如何删除账户？','请发送邮件至 support@skillmarket.com 申请注销，我们将在7个工作日内处理。'),
+    ] %}
+    <details style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;transition:.2s" onmouseover="this.style.borderColor='rgba(91,141,239,.3)'" onmouseout="this.style.borderColor='var(--border)'">
+      <summary style="padding:1rem 1.25rem;cursor:pointer;font-weight:500;font-size:.9rem;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:1rem">
+        <span>{{ q }}</span><span style="color:var(--text3);font-size:.8rem;flex-shrink:0">▾</span>
+      </summary>
+      <div style="padding:.75rem 1.25rem 1rem;color:var(--text2);font-size:.86rem;line-height:1.75;border-top:1px solid var(--border)">{{ a }}</div>
+    </details>
+    {% endfor %}
+  </div>
+
+  <div style="text-align:center;padding:2rem;background:linear-gradient(120deg,rgba(91,141,239,.08),rgba(232,93,138,.05));border:1px solid rgba(91,141,239,.18);border-radius:var(--r-lg)">
+    <div style="font-size:1.5rem;margin-bottom:.5rem">✉️</div>
+    <p style="color:var(--text2);margin-bottom:1rem;font-size:.9rem">没找到您的问题？随时联系我们</p>
+    <a href="mailto:support@skillmarket.com" class="btn btn-p">📧 发邮件给我们</a>
+  </div>
+</div>
+{% endblock %}

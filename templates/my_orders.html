@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}我的订单 — SkillMarket{% endblock %}
+{% block breadcrumb_label %}我的订单{% endblock %}
+{% block head %}
+<style>
+.ow{max-width:860px;margin:0 auto}
+.tabs{display:flex;gap:.4rem;margin-bottom:1.35rem;flex-wrap:wrap}
+.tab{padding:.45rem 1.1rem;border-radius:40px;font-size:.82rem;cursor:pointer;transition:.2s;border:1px solid var(--border);color:var(--text2)}
+.tab:hover{color:var(--text);border-color:var(--A)}
+.tab.on{background:var(--A);color:#fff;border-color:var(--A);box-shadow:0 2px 12px rgba(91,141,239,.3)}
+.or{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.1rem 1.35rem;margin-bottom:.85rem;display:flex;align-items:center;gap:1.1rem;transition:.25s}
+.or:hover{border-color:rgba(91,141,239,.3);transform:translateX(3px)}
+.oi{font-size:1.7rem;flex-shrink:0}
+.oi2{flex:1;min-width:0}
+.ot{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.om{font-size:.75rem;color:var(--text3);margin-top:.2rem}
+.or-r{text-align:right;flex-shrink:0}
+.op2{font-size:1.1rem;font-weight:700;color:var(--B)}
+.empty{text-align:center;padding:3.5rem 2rem;color:var(--text3)}
+.empty .ei{font-size:2.8rem;margin-bottom:.8rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="ow">
+    <h1 style="font-size:1.4rem;font-weight:700;margin-bottom:1.35rem">我的订单</h1>
+    <div class="tabs">
+      <a href="/my-orders" class="tab {% if not current_status %}on{% endif %}">全部</a>
+      <a href="/my-orders?status=pending"    class="tab {% if current_status=='pending'    %}on{% endif %}">待支付</a>
+      <a href="/my-orders?status=paid"       class="tab {% if current_status=='paid'       %}on{% endif %}">已支付</a>
+      <a href="/my-orders?status=in_progress"class="tab {% if current_status=='in_progress'%}on{% endif %}">进行中</a>
+      <a href="/my-orders?status=completed"  class="tab {% if current_status=='completed'  %}on{% endif %}">已完成</a>
+      <a href="/my-orders?status=cancelled"  class="tab {% if current_status=='cancelled'  %}on{% endif %}">已取消</a>
+    </div>
+
+    {% if orders %}
+      {% for o in orders %}
+      <a href="/order/{{ o.id }}">
+        <div class="or">
+          <span class="oi">{{ cat_icons.get(o.service.category if o.service else '','⭐') }}</span>
+          <div class="oi2">
+            <div class="ot">{{ o.service.title if o.service else '服务已下架' }}</div>
+            <div class="om">#{{ "%06d"|format(o.id) }} · {{ o.created_at.strftime('%Y-%m-%d %H:%M') }} · {{ o.provider_rel.name if o.provider_rel else '未知' }}</div>
+          </div>
+          <div class="or-r">
+            <div class="op2">¥{{ "%.0f"|format(o.price) }}</div>
+            <div style="margin-top:.35rem">
+              <span class="badge b-{{ o.status }}">
+                {% if o.status=='pending' %}待支付{% elif o.status=='paid' %}已支付{% elif o.status=='in_progress' %}进行中{% elif o.status=='completed' %}已完成{% else %}已取消{% endif %}
+              </span>
+            </div>
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <div class="empty">
+        <div class="ei">📋</div>
+        <p>暂无订单记录</p>
+        <a href="/services" class="btn btn-p" style="margin-top:1rem">去浏览服务</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
