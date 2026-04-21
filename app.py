@@ -719,9 +719,11 @@ def api_search():
 def seed():
     if User.query.count() > 0:
         return
+
     admin = User(username='admin', email='admin@skillmarket.com',
                  password=generate_password_hash('admin123'), role='admin')
     db.session.add(admin)
+
     pdata = [
         ('黎大凡','zhang@example.com','专业UI/UX设计师，5年经验，服务过100+企业客户','设计,UI,Figma','北京'),
         ('尹小恒','li@example.com','全栈工程师，Python/React/Node，交付快质量高','编程,Python,React','上海'),
@@ -737,57 +739,146 @@ def seed():
         p = Provider(user_id=u.id, name=name, bio=bio, skills=skills, location=loc, rating=4.8)
         db.session.add(p); db.session.flush()
         provs.append(p)
+
     sdata = [
         (0,'专业UI界面设计','提供高质量UI界面设计，涵盖移动端与PC端，交付Figma源文件及标注文档。',
          'fixed',299,0,0,'3-5个工作日',
-         '需求沟通与确认\n草图/线框图设计\n视觉稿设计\n修改与完善\n交付源文件',
-         '设计',4.9,22,88),
+         '需求沟通与确认\n草图/线框图设计\n视觉稿设计\n修改与完善\n交付源文件','设计',88),
         (0,'企业Logo品牌设计','为企业/产品打造专属品牌标识，提供多套方案，附带VI规范说明。',
          'fixed',199,0,0,'2-3个工作日',
-         '品牌需求沟通\n概念草图设计\n方案提案（3套）\n细化选定方案\n交付矢量源文件',
-         '设计',4.8,18,64),
+         '品牌需求沟通\n概念草图设计\n方案提案（3套）\n细化选定方案\n交付矢量源文件','设计',64),
         (0,'商务PPT设计','专业商务演示PPT制作，图文并茂逻辑清晰，72小时内交付。',
          'hourly',80,0,0,'1-3个工作日',
-         '内容大纲确认\n页面设计排版\n内容填充完善\n终稿交付',
-         '设计',4.7,31,120),
+         '内容大纲确认\n页面设计排版\n内容填充完善\n终稿交付','设计',120),
         (1,'Python爬虫定制开发','数据采集定制方案，支持各类复杂网站，数据导出Excel/JSON/数据库。',
          'negotiable',399,200,800,'5-7个工作日',
-         '需求分析与评估\n方案设计\n爬虫开发\n测试与调试\n数据交付及说明文档',
-         '编程',4.9,15,52),
+         '需求分析与评估\n方案设计\n爬虫开发\n测试与调试\n数据交付及说明文档','编程',52),
         (1,'React前端网页开发','响应式网页开发，现代UI框架，SEO优化，代码整洁注释完善。',
          'negotiable',599,300,1500,'7-14个工作日',
-         '需求调研\n原型设计确认\n前端开发\n联调测试\n部署上线',
-         '编程',4.8,9,38),
+         '需求调研\n原型设计确认\n前端开发\n联调测试\n部署上线','编程',38),
         (2,'商业产品拍摄','专业棚拍+外景，后期精修，适用于电商平台和广告投放。',
          'fixed',899,0,0,'1-2个工作日',
-         '拍摄需求沟通\n场景搭建\n正式拍摄\n后期精修\n图片交付',
-         '摄影',5.0,8,29),
+         '拍摄需求沟通\n场景搭建\n正式拍摄\n后期精修\n图片交付','摄影',29),
         (3,'英文文档翻译','英↔中专业翻译，支持商务/法律/学术文件，保证专业准确。',
          'hourly',80,0,0,'1个工作日/千字',
-         '文档分析评估\n专业翻译\n校对审核\n交付译稿',
-         '语言',4.8,27,98),
+         '文档分析评估\n专业翻译\n校对审核\n交付译稿','语言',98),
         (3,'英语口语一对一陪练','每次1小时，发音纠正+情景对话+商务英语，外教级别体验。',
          'hourly',120,0,0,'预约时间',
-         '需求评估与课程规划\n正式上课\n课后作业与反馈',
-         '语言',4.9,19,73),
+         '需求评估与课程规划\n正式上课\n课后作业与反馈','语言',73),
         (4,'小红书/抖音账号运营','内容规划+图文制作+数据分析，助力粉丝快速增长。',
          'negotiable',1299,800,3000,'长期合作',
-         '账号诊断与定位\n内容策略制定\n内容创作执行\n数据分析报告\n策略持续优化',
-         '营销',4.7,6,22),
+         '账号诊断与定位\n内容策略制定\n内容创作执行\n数据分析报告\n策略持续优化','营销',22),
     ]
+
+    svcs = []
     for row in sdata:
-        pi,title,desc,pt,price,pmin,pmax,dtime,steps,cat,rat,rcnt,ocnt = row
-        svc = Service(provider_id=provs[pi].id, title=title, description=desc,
-                      price_type=pt, price=price, price_min=pmin, price_max=pmax,
-                      delivery_time=dtime, service_steps=steps,
-                      category=cat, rating=rat, review_count=rcnt, order_count=ocnt)
-        db.session.add(svc)
-    for i in range(1, 4):
-        u = User(username=f'用户{i}', email=f'user{i}@example.com',
+        pi, title, desc, pt, price, pmin, pmax, dtime, steps, cat, ocnt = row
+        svc = Service(
+            provider_id=provs[pi].id, title=title, description=desc,
+            price_type=pt, price=price, price_min=pmin, price_max=pmax,
+            delivery_time=dtime, service_steps=steps,
+            category=cat, rating=5.0, review_count=0, order_count=ocnt
+        )
+        db.session.add(svc); db.session.flush()
+        svcs.append(svc)
+
+    # ── 创建普通买家用户 ──────────────────────────────────────────────
+    udata = [
+        ('王小明', 'user1@example.com'),
+        ('李晓华', 'user2@example.com'),
+        ('张雨晴', 'user3@example.com'),
+    ]
+    buyers = []
+    for uname, uemail in udata:
+        u = User(username=uname, email=uemail,
                  password=generate_password_hash('pass123'), role='user')
-        db.session.add(u)
+        db.session.add(u); db.session.flush()
+        buyers.append(u)
+
+    # ── 评价数据：(服务索引, 买家索引, 星级, 评价内容, 标签) ──────────
+    # 每个服务 3 条真实评价，review_count 将由代码统计
+    rdata = [
+        # 0 专业UI界面设计
+        (0, 0, 5, 'Figma文件交付极为规范，标注清晰，开发同事直呼省心，超出预期！', '质量超预期,沟通顺畅,交付及时'),
+        (0, 1, 5, '提了好几次修改意见都非常配合，最终视觉效果非常惊艳，强烈推荐！', '专业度高,态度友好'),
+        (0, 2, 4, '整体设计风格现代，响应迅速，细节上有一两处小调整，整体非常满意。', '如实描述,性价比高'),
+        # 1 企业Logo品牌设计
+        (1, 0, 5, '提供了三套完全不同风格的方案，最终落地效果极具品牌感，客户都说好！', '质量超预期,如实描述'),
+        (1, 1, 5, '矢量文件规范，颜色模式齐全，印刷物料直接可用，专业度一流。', '沟通顺畅,专业度高'),
+        (1, 2, 5, '完全按需求来，反复沟通后效果完美，价格实惠，下次还会找！', '交付及时,态度友好'),
+        # 2 商务PPT设计
+        (2, 0, 5, '排版逻辑清晰、视觉精美，老板演讲完直接被问PPT是哪做的，太强了！', '质量超预期,交付及时'),
+        (2, 1, 4, '整体效果很好，比预期交付时间晚了半天，但质量确实值，瑕不掩瑜。', '专业度高,如实描述'),
+        (2, 2, 5, '模板简洁大气，动画不花哨，整体观感非常专业，非常推荐！', '性价比高,沟通顺畅'),
+        # 3 Python爬虫定制开发
+        (3, 0, 5, '爬虫稳定运行一个月没出问题，说明文档详细，数据格式完美匹配需求！', '质量超预期,专业度高'),
+        (3, 1, 5, '遇到反爬机制主动帮解决，代码整洁、注释完善，后续维护方便。', '沟通顺畅,态度友好'),
+        (3, 2, 5, '按时交付，Excel导出格式完全符合要求，沟通顺畅，会再合作。', '交付及时,如实描述'),
+        # 4 React前端网页开发
+        (4, 0, 5, '代码质量极高，组件复用设计合理，SEO优化也做到位，非常专业！', '质量超预期,专业度高'),
+        (4, 1, 4, '功能全部实现，沟通顺畅，有个移动端小细节请求后快速调整了。', '沟通顺畅,交付及时'),
+        (4, 2, 5, '连部署上线都帮忙搞定，性价比极高，是我用过最靠谱的开发者！', '性价比高,态度友好'),
+        # 5 商业产品拍摄
+        (5, 0, 5, '产品照质量惊艳，光线角度专业，上架后转化率明显提升！', '质量超预期,交付及时'),
+        (5, 1, 5, '外景+棚拍都有，拍摄角度多样，后期精修细腻，完全超出预算预期。', '专业度高,态度友好'),
+        (5, 2, 4, '整体风格统一，视觉呈现干净，修图有亮点，沟通也很流畅。', '如实描述,沟通顺畅'),
+        # 6 英文文档翻译
+        (6, 0, 5, '法律合同翻译专业准确，术语处理严谨，法务团队审核后直接通过！', '质量超预期,交付及时'),
+        (6, 1, 5, '速度快，修改反馈秒回，连格式都完整保留，业界良心！', '专业度高,态度友好'),
+        (6, 2, 5, '学术论文翻译忠实原意，学术风格保持得很好，投稿直接用了。', '如实描述,性价比高'),
+        # 7 英语口语一对一陪练
+        (7, 0, 5, '发音细节纠正得很到位，商务场景练习非常实用，三节课进步明显！', '质量超预期,沟通顺畅'),
+        (7, 1, 5, '课堂氛围轻松不死板，口语训练方式很科学，强烈推荐！', '专业度高,态度友好'),
+        (7, 2, 4, '课程内容丰富，时间安排灵活，整体体验非常好，会继续预约。', '如实描述,交付及时'),
+        # 8 小红书/抖音账号运营
+        (8, 0, 5, '两个月粉丝从200涨到5000+，内容策略精准，数据报告专业详细！', '质量超预期,专业度高'),
+        (8, 1, 5, '执行力超强，每周产出内容有创意，合作过程非常愉快！', '沟通顺畅,如实描述'),
+        (8, 2, 4, '创意方向好，运营思路清晰，效果持续增长，适合长期合作。', '性价比高,态度友好'),
+    ]
+
+    from datetime import timedelta
+    base_time = datetime(2025, 10, 1)
+
+    for i, (si, ui, rating, comment, tags) in enumerate(rdata):
+        svc   = svcs[si]
+        buyer = buyers[ui]
+        # 创建已完成订单
+        order = Order(
+            user_id=buyer.id,
+            service_id=svc.id,
+            provider_id=svc.provider_id,
+            status='completed',
+            price=svc.price,
+            deliver_note='服务已完成，感谢使用！',
+            delivered_at=base_time + timedelta(days=i * 4 + 2),
+            created_at=base_time + timedelta(days=i * 4),
+            updated_at=base_time + timedelta(days=i * 4 + 3),
+        )
+        db.session.add(order); db.session.flush()
+        # 创建对应评价
+        rev = Review(
+            order_id=order.id,
+            service_id=svc.id,
+            user_id=buyer.id,
+            provider_id=svc.provider_id,
+            rating=rating,
+            comment=comment,
+            tags=tags,
+            created_at=base_time + timedelta(days=i * 4 + 3),
+        )
+        db.session.add(rev)
+
+    db.session.flush()
+
+    # ── 根据真实评价更新 review_count 和 rating ─────────────────────
+    for svc in svcs:
+        revs = Review.query.filter_by(service_id=svc.id).all()
+        if revs:
+            svc.review_count = len(revs)
+            svc.rating = round(sum(r.rating for r in revs) / len(revs), 1)
+
     db.session.commit()
-    print('✅ 示例数据初始化完成')
+    print('✅ 示例数据初始化完成（含真实评价记录）')
 
 with app.app_context():
     db.create_all()
