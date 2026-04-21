@@ -327,12 +327,14 @@ def start_order(oid):
     order = Order.query.get_or_404(oid)
     pp = current_user.provider_profile
     if not pp or pp.id != order.provider_id:
-        return jsonify({'ok':False,'msg':'无权操作'}), 403
+        return jsonify({'ok': False, 'msg': '无权操作'}), 403
     if order.status != 'paid':
-        return jsonify({'ok':False,'msg':'请等待买家支付'})
-    order.status = 'in_progress'; order.updated_at = datetime.utcnow()
+        return jsonify({'ok': False, 'msg': '请等待买家支付'})
+    order.status = 'in_progress'
+    order.updated_at = datetime.utcnow()
     db.session.commit()
-    return jsonify({'ok':True,'msg':'已开始服务'})
+    return jsonify({'ok': True, 'msg': '已开始服务', 'redirect': f'/order/{oid}'})
+
 
 @app.route('/order/<int:oid>/step', methods=['POST'])
 @login_required
@@ -711,11 +713,25 @@ def api_search():
     ).limit(8).all()
     return jsonify([{'id':s.id,'title':s.title,'price':s.price,
                      'price_type':s.price_type,'category':s.category} for s in results])
-
+def migrate_db():
+    """安全地向已有表添加缺失字段（列已存在时静默跳过）"""
+    from sqlalchemy import text
+    with db.engine.connect() as conn:
+        migrations = [
+            "ALTER TABLE orders ADD COLUMN deliver_note TEXT DEFAULT ''",
+            "ALTER TABLE orders ADD COLUMN deliver_link VARCHAR(500) DEFAULT ''",
+            "ALTER TABLE orders ADD COLUMN delivered_at DATETIME",
+            "ALTER TABLE reviews ADD COLUMN service_id INTEGER",
+        ]
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                pass  # 列已存在，跳过
 # ══════════════════════════════════════════
 # 示例数据
-# ══════════════════════════════════════════
-
+# ══════════════════════════════════════════    
 def seed():
     if User.query.count() > 0:
         return
@@ -882,6 +898,7 @@ def seed():
 
 with app.app_context():
     db.create_all()
+     migrate_db()
     seed()
 
 if __name__ == '__main__':
