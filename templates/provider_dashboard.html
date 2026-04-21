@@ -22,7 +22,7 @@
 .sm-ic{font-size:1.4rem;flex-shrink:0}.sm-inf{flex:1;min-width:0}
 .sm-t{font-weight:600;font-size:.88rem}.sm-m{font-size:.72rem;color:var(--text3);margin-top:.15rem}
 .sm-acts{display:flex;gap:.4rem;flex-shrink:0}
-/* ── 订单卡片（增强版）─────────────────────── */
+/* ── 订单卡片 ─────────────────── */
 .omr{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.1rem;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:.55rem;transition:.2s}
 .omr:hover{border-color:rgba(91,141,239,.25)}
 .omr.urgent{border-color:rgba(232,93,138,.35);background:rgba(232,93,138,.04)}
@@ -30,11 +30,20 @@
 .odot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .dp{background:#f5c542}.dd{background:var(--A)}.dc{background:var(--C)}.dca{background:var(--B)}
 .o-acts{display:flex;gap:.4rem;flex-shrink:0;flex-wrap:wrap}
-/* ── 新订单提醒横幅 ────────────────────────── */
+/* ── 提醒横幅 ─────────────────── */
 .alert-banner{background:linear-gradient(120deg,rgba(232,93,138,.12),rgba(91,141,239,.08));border:1px solid rgba(232,93,138,.3);border-radius:12px;padding:.85rem 1.1rem;margin-bottom:1.1rem;display:flex;align-items:center;gap:.75rem}
 .alert-banner .ab-icon{font-size:1.4rem;flex-shrink:0}
 .alert-banner .ab-text{flex:1;font-size:.86rem}
 .alert-banner .ab-count{font-weight:700;color:var(--B)}
+/* ══ 弹窗（关键：此处必须定义，否则不居中）══ */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:500;display:none;align-items:center;justify-content:center;padding:1rem}
+.modal-bg.on{display:flex;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.85rem;max-width:500px;width:100%;animation:slideUp .22s ease;box-shadow:0 20px 60px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto}
+@keyframes slideUp{from{transform:translateY(22px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal h3{font-size:1.1rem;font-weight:700;margin-bottom:.4rem}
+.modal > p{color:var(--text2);font-size:.86rem;margin-bottom:1rem}
+.modal-acts{display:flex;gap:.65rem;margin-top:1rem}
 </style>
 {% endblock %}
 {% block content %}
@@ -59,13 +68,13 @@
     <div class="ptab on" onclick="sw('svc',this)">我的服务（{{ stats.total_services }}）</div>
     <div class="ptab" onclick="sw('ord',this)" id="ordTab">
       订单管理（{{ stats.total_orders }}）
-      {# 有需要处理的订单时显示小红点 #}
       {% set urgent_count = orders | selectattr('status','in',['paid','in_progress','delivered']) | list | length %}
       {% if urgent_count > 0 %}<span class="badge-dot"></span>{% endif %}
     </div>
     <div class="ptab" onclick="sw('prf',this)">个人信息</div>
   </div>
 
+  <!-- 我的服务 -->
   <div class="pc on" id="pc-svc">
     {% if services %}
       {% for s in services %}
@@ -97,60 +106,64 @@
     {% endif %}
   </div>
 
+  <!-- 订单管理 -->
   <div class="pc" id="pc-ord">
     {% if orders %}
 
-      {# ── 需要操作的订单统计提醒 ─────────────────────── #}
-      {% set need_start    = orders | selectattr('status','eq','paid')        | list %}
-      {% set need_deliver  = orders | selectattr('status','eq','in_progress') | list %}
-      {% set need_confirm  = orders | selectattr('status','eq','delivered')   | list %}
+      {% set need_start   = orders | selectattr('status','eq','paid')        | list %}
+      {% set need_deliver = orders | selectattr('status','eq','in_progress') | list %}
+      {% set need_confirm = orders | selectattr('status','eq','delivered')   | list %}
 
       {% if need_start or need_deliver or need_confirm %}
       <div class="alert-banner">
         <span class="ab-icon">🔔</span>
         <div class="ab-text">
           你有需要处理的订单：
-          {% if need_start %}<span class="ab-count">{{ need_start|length }} 个</span>待开始服务
-          {% endif %}
-          {% if need_deliver %}{% if need_start %}、{% endif %}<span class="ab-count">{{ need_deliver|length }} 个</span>进行中（可交付）
-          {% endif %}
-          {% if need_confirm %}{% if need_start or need_deliver %}、{% endif %}<span class="ab-count">{{ need_confirm|length }} 个</span>买家已验收
-          {% endif %}
+          {% if need_start %}<span class="ab-count">{{ need_start|length }} 个</span>待开始服务{% endif %}
+          {% if need_deliver %}{% if need_start %}、{% endif %}<span class="ab-count">{{ need_deliver|length }} 个</span>进行中（可交付）{% endif %}
+          {% if need_confirm %}{% if need_start or need_deliver %}、{% endif %}<span class="ab-count">{{ need_confirm|length }} 个</span>买家待验收{% endif %}
           —— 请及时处理！
         </div>
       </div>
       {% endif %}
 
       {% for o in orders %}
-      {# 根据状态确定样式和操作按钮 #}
-      {% set is_urgent       = o.status == 'paid' %}
-      {% set is_action       = o.status == 'in_progress' %}
-      {% set is_verify       = o.status == 'delivered' %}
+      {% set is_urgent  = o.status == 'paid' %}
+      {% set is_action  = o.status == 'in_progress' %}
+      {% set is_verify  = o.status == 'delivered' %}
       <div class="omr {{ 'urgent' if is_urgent else ('action-needed' if is_action else '') }}">
         <div class="odot {% if o.status=='pending' %}dp{% elif o.status in ['paid','in_progress','delivered'] %}dd{% elif o.status=='completed' %}dc{% else %}dca{% endif %}"></div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-            <span style="font-size:.86rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px">{{ o.service.title if o.service else '已删除' }}</span>
-            {# 状态提示标签 #}
+            <span style="font-size:.86rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px">
+              {{ o.service.title if o.service else '已删除服务' }}
+            </span>
             {% if is_urgent %}<span style="font-size:.65rem;padding:.1rem .45rem;border-radius:20px;background:rgba(232,93,138,.15);color:var(--B)">⚡ 待开始</span>
             {% elif is_action %}<span style="font-size:.65rem;padding:.1rem .45rem;border-radius:20px;background:rgba(91,141,239,.15);color:var(--A)">🔧 进行中</span>
             {% elif is_verify %}<span style="font-size:.65rem;padding:.1rem .45rem;border-radius:20px;background:rgba(62,207,170,.15);color:var(--C)">✅ 已交付</span>
+            {% elif o.status=='completed' %}<span style="font-size:.65rem;padding:.1rem .45rem;border-radius:20px;background:rgba(62,207,170,.1);color:var(--C)">🎉 已完成</span>
             {% endif %}
           </div>
           <div style="font-size:.72rem;color:var(--text3);margin-top:.2rem">
-            买家: {{ o.buyer.username }} · {{ o.created_at.strftime('%m-%d %H:%M') }} · <span style="color:var(--B);font-weight:600">¥{{ "%.0f"|format(o.price) }}</span>
+            买家: {{ o.buyer.username if o.buyer else '已注销' }} ·
+            {{ o.created_at.strftime('%m-%d %H:%M') }} ·
+            <span style="color:var(--B);font-weight:600">¥{{ "%.0f"|format(o.price) }}</span>
           </div>
         </div>
         <div class="o-acts">
-          {# 快捷操作按钮（不用进入详情页就能操作）#}
+          {# 关键修复：开始服务后跳转到订单详情页，而非 reload #}
           {% if is_urgent %}
             <button class="btn btn-ok" style="padding:.35rem .75rem;font-size:.78rem"
-              onclick="doOrderAct('/order/{{ o.id }}/start','确认开始为「{{ o.buyer.username }}」提供服务？')">▶ 开始服务</button>
+              onclick="startService({{ o.id }}, '{{ (o.buyer.username if o.buyer else '用户') | e }}')">
+              ▶ 开始服务
+            </button>
           {% elif is_action %}
             <button class="btn btn-p" style="padding:.35rem .75rem;font-size:.78rem"
-              onclick="openDeliverModal({{ o.id }}, '{{ o.service.title if o.service else '' }}')">📦 提交交付</button>
+              onclick="openDeliverModal({{ o.id }}, '{{ (o.service.title if o.service else '') | e }}')">
+              📦 提交交付
+            </button>
           {% elif is_verify %}
-            <span style="font-size:.72rem;color:var(--C);padding:.35rem .4rem">等待买家验收</span>
+            <span style="font-size:.72rem;color:var(--C);padding:.35rem .4rem">⏳ 等待买家验收</span>
           {% endif %}
           <a href="/order/{{ o.id }}" class="btn btn-s" style="padding:.35rem .65rem;font-size:.78rem">详情</a>
         </div>
@@ -162,6 +175,7 @@
     {% endif %}
   </div>
 
+  <!-- 个人信息 -->
   <div class="pc" id="pc-prf">
     <div style="max-width:520px">
       <form method="POST" action="/profile/edit">
@@ -175,14 +189,15 @@
   </div>
 </div>
 
-{# ── 交付物填写弹窗 ─────────────────────────────────────────── #}
+<!-- 交付弹窗（居中已修复：上方已加入 .modal-bg CSS） -->
 <div class="modal-bg" id="deliverModal">
-  <div class="modal" style="max-width:500px">
+  <div class="modal">
     <h3>📦 提交交付</h3>
-    <p id="deliverModalTitle" style="margin-bottom:1rem"></p>
+    <p id="deliverModalTitle"></p>
     <div class="fg">
       <label class="fl-label">交付说明 <span style="color:var(--B)">*</span></label>
-      <textarea id="deliverNote" class="fc" rows="4" placeholder="描述你交付的内容、成果、使用说明等…" maxlength="1000"></textarea>
+      <textarea id="deliverNote" class="fc" rows="5"
+        placeholder="详细描述你交付的成果、文件说明、使用方法等…" maxlength="1000"></textarea>
     </div>
     <div class="fg">
       <label class="fl-label">交付链接（可选，如网盘/作品链接）</label>
@@ -203,17 +218,22 @@ function sw(name, el) {
   document.getElementById('pc-' + name).classList.add('on');
 }
 
-// 订单快捷操作（开始服务等）
-async function doOrderAct(url, msg) {
-  if (!confirm(msg)) return;
-  const r = await fetch(url, { method:'POST' });
+// ── 开始服务：成功后跳转订单详情页（修复：原来只 reload，无法进入管理流程）──
+async function startService(orderId, buyerName) {
+  if (!confirm(`确认开始为「${buyerName}」提供服务？\n点击确定后将进入订单管理页面。`)) return;
+  const r = await fetch(`/order/${orderId}/start`, { method: 'POST' });
   const d = await r.json();
-  alert(d.msg);
-  if (d.ok) location.reload();
+  if (d.ok) {
+    // 跳转到订单详情页：可查看订单信息、联系买家、提交交付
+    window.location.href = `/order/${orderId}`;
+  } else {
+    alert(d.msg || '操作失败');
+  }
 }
 
-// 交付弹窗
+// ── 交付弹窗 ──────────────────────────────────────────────────────────────
 let deliverOrderId = null;
+
 function openDeliverModal(orderId, title) {
   deliverOrderId = orderId;
   document.getElementById('deliverModalTitle').textContent = '服务：' + title;
@@ -221,10 +241,13 @@ function openDeliverModal(orderId, title) {
   document.getElementById('deliverLink').value = '';
   document.getElementById('deliverModal').classList.add('on');
 }
+
 function closeDeliverModal() {
   document.getElementById('deliverModal').classList.remove('on');
   deliverOrderId = null;
 }
+
+// 点背景关闭弹窗
 document.getElementById('deliverModal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeDeliverModal();
 });
@@ -236,10 +259,15 @@ async function submitDeliver() {
   const fd = new FormData();
   fd.append('note', note);
   if (link) fd.append('link', link);
-  const r = await fetch('/order/' + deliverOrderId + '/deliver', { method:'POST', body:fd });
+  const r = await fetch(`/order/${deliverOrderId}/deliver`, { method: 'POST', body: fd });
   const d = await r.json();
-  alert(d.msg);
-  if (d.ok) { closeDeliverModal(); location.reload(); }
+  if (d.ok) {
+    closeDeliverModal();
+    // 提交成功后跳转到订单详情页，等待买家验收
+    window.location.href = `/order/${deliverOrderId}`;
+  } else {
+    alert(d.msg || '提交失败');
+  }
 }
 </script>
 {% endblock %}
