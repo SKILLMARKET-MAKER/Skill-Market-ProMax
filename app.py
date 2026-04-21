@@ -898,7 +898,7 @@ def seed():
 
 with app.app_context():
     db.create_all()
-     migrate_db()
+    migrate_db()
     seed()
 
 if __name__ == '__main__':
