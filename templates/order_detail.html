@@ -11,9 +11,9 @@
 .ocard{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.75rem;margin-bottom:1.25rem}
 .oh{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.4rem;flex-wrap:wrap;gap:.75rem}
 .oid{font-size:.75rem;color:var(--text3);margin-top:.2rem}
-.sref{display:flex;align-items:center;gap:.9rem;padding:.9rem;background:var(--bg3);border-radius:10px;margin-bottom:1.4rem;transition:.2s;border:1px solid transparent}
-.sref:hover{border-color:rgba(91,141,239,.25)}
-.sref-ic{font-size:1.8rem}.sref-t{font-weight:600;font-size:.92rem}.sref-p{color:var(--B);font-size:.85rem;margin-top:.2rem}
+.sref{display:flex;align-items:center;gap:.9rem;padding:.9rem;background:var(--bg2);border-radius:10px;margin-bottom:1.4rem;transition:.2s;border:1px solid transparent;text-decoration:none}
+.sref:hover{border-color:rgba(74,120,229,.25)}
+.sref-ic{font-size:1.8rem}.sref-t{font-weight:600;font-size:.92rem;color:var(--text)}.sref-p{color:var(--B);font-size:.85rem;margin-top:.2rem}
 .ig{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-bottom:1.4rem}
 .ii .il{font-size:.72rem;color:var(--text3);margin-bottom:.25rem}.ii .iv{font-size:.9rem;font-weight:500}
 .acts{display:flex;gap:.65rem;flex-wrap:wrap}
@@ -22,26 +22,38 @@
 .step-row{position:relative;padding-bottom:1.1rem}
 .step-row:last-child{padding-bottom:0}
 .step-dot{position:absolute;left:-1.65rem;top:4px;width:12px;height:12px;border-radius:50%;background:var(--bg3);border:2px solid var(--border);transition:.3s}
-.step-row.done .step-dot{background:var(--C);border-color:var(--C);box-shadow:0 0 0 3px rgba(62,207,170,.2)}
-.step-row.active .step-dot{background:var(--A);border-color:var(--A);box-shadow:0 0 0 4px rgba(91,141,239,.22)}
+.step-row.done .step-dot{background:var(--C);border-color:var(--C);box-shadow:0 0 0 3px rgba(24,180,142,.2)}
+.step-row.active .step-dot{background:var(--A);border-color:var(--A);box-shadow:0 0 0 4px rgba(74,120,229,.22)}
 .step-name{font-size:.88rem;font-weight:500}.step-tag{font-size:.7rem;margin-left:.5rem;padding:.1rem .4rem;border-radius:20px}
 .star-row{display:flex;gap:.35rem;margin-bottom:.9rem}
 .sb{font-size:1.45rem;cursor:pointer;color:var(--border);transition:.15s}.sb.on{color:#f5c542}
-.rev-form{background:var(--bg3);border-radius:12px;padding:1.1rem}
+.rev-form{background:var(--bg2);border-radius:12px;padding:1.1rem}
 .tag-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .75rem;border-radius:20px;font-size:.78rem;cursor:pointer;border:1px solid var(--border);color:var(--text2);transition:.2s;margin:.2rem .2rem 0 0}
-.tag-chip.on{border-color:var(--A);color:var(--A);background:rgba(91,141,239,.1)}
+.tag-chip.on{border-color:var(--A);color:var(--A);background:rgba(74,120,229,.1)}
 /* 交付物卡片 */
-.deliver-card{background:linear-gradient(120deg,rgba(62,207,170,.08),rgba(91,141,239,.05));border:1px solid rgba(62,207,170,.3);border-radius:12px;padding:1.1rem;margin-bottom:1.4rem}
+.deliver-card{background:linear-gradient(120deg,rgba(24,180,142,.08),rgba(74,120,229,.05));border:1px solid rgba(24,180,142,.3);border-radius:12px;padding:1.1rem;margin-bottom:1.4rem}
 .deliver-card .dc-hd{display:flex;align-items:center;gap:.5rem;font-weight:600;margin-bottom:.75rem;color:var(--C)}
 .deliver-card .dc-note{font-size:.88rem;color:var(--text2);line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .deliver-card .dc-link{display:inline-flex;align-items:center;gap:.35rem;margin-top:.65rem;font-size:.83rem;color:var(--A);text-decoration:underline;text-underline-offset:3px}
 /* 验收提示 */
-.confirm-hint{background:rgba(245,197,66,.1);border:1px solid rgba(245,197,66,.3);border-radius:10px;padding:.85rem 1.1rem;margin-bottom:1.4rem;font-size:.85rem;display:flex;align-items:flex-start;gap:.6rem}
+.confirm-hint{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:.85rem 1.1rem;margin-bottom:1.4rem;font-size:.85rem;display:flex;align-items:flex-start;gap:.6rem;color:#92400e}
+
+/* ═══ 弹窗（修复：此前缺失此CSS导致不居中）═══ */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:500;display:none;align-items:center;justify-content:center;padding:1rem}
+.modal-bg.on{display:flex;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.85rem;max-width:500px;width:100%;animation:slideUp .22s ease;box-shadow:0 20px 60px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto}
+@keyframes slideUp{from{transform:translateY(22px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal h3{font-size:1.1rem;font-weight:700;margin-bottom:.4rem}
+.modal > p{color:var(--text2);font-size:.86rem;margin-bottom:1.35rem}
+.modal-acts{display:flex;gap:.65rem}
 </style>
 {% endblock %}
 {% block content %}
 <div class="wrap">
   <div class="od-wrap">
+
+    <!-- 订单主信息卡片 -->
     <div class="ocard">
       <div class="oh">
         <div>
@@ -59,14 +71,12 @@
       </div>
 
       {% if order.service %}
-      <a href="/service/{{ order.service.id }}">
-        <div class="sref">
-          {% set ic={'设计':'🎨','编程':'💻','摄影':'📸','语言':'🌐','营销':'📢','其他':'⭐'} %}
-          <span class="sref-ic">{{ ic.get(order.service.category,'⭐') }}</span>
-          <div>
-            <div class="sref-t">{{ order.service.title }}</div>
-            <div class="sref-p">¥{{ "%.0f"|format(order.price) }}{% if order.service.price_type=='hourly' %} · {{ order.hours }}小时{% endif %}</div>
-          </div>
+      <a href="/service/{{ order.service.id }}" class="sref">
+        {% set ic={'设计':'🎨','编程':'💻','摄影':'📸','语言':'🌐','营销':'📢','其他':'⭐'} %}
+        <span class="sref-ic">{{ ic.get(order.service.category,'⭐') }}</span>
+        <div>
+          <div class="sref-t">{{ order.service.title }}</div>
+          <div class="sref-p">¥{{ "%.0f"|format(order.price) }}{% if order.service.price_type=='hourly' %} · {{ order.hours }}小时{% endif %}</div>
         </div>
       </a>
       {% endif %}
@@ -78,7 +88,7 @@
         {% if order.note %}<div class="ii" style="grid-column:1/-1"><div class="il">买家备注</div><div class="iv" style="font-size:.82rem;color:var(--text2)">{{ order.note }}</div></div>{% endif %}
       </div>
 
-      {# ── 交付物展示（服务者已交付后显示给买家）──────────────── #}
+      <!-- 交付物展示 -->
       {% if order.status in ['delivered','completed'] and order.deliver_note %}
       <div class="deliver-card">
         <div class="dc-hd">📬 服务者的交付内容</div>
@@ -92,7 +102,7 @@
       </div>
       {% endif %}
 
-      {# ── 待验收时的操作提示 ────────────────────────────────── #}
+      <!-- 待验收提示 -->
       {% if order.status=='delivered' and order.user_id==current_user.id %}
       <div class="confirm-hint">
         <span>💡</span>
@@ -112,7 +122,8 @@
           <button class="btn btn-p" onclick="document.getElementById('deliverModal').classList.add('on')">📦 提交交付</button>
         {% endif %}
         {% if order.status=='delivered' and order.user_id==current_user.id %}
-          <button class="btn btn-ok" onclick="doAct('/order/{{ order.id }}/complete','确认验收并完成订单？完成后将无法撤销。')">✅ 确认验收</button>
+          <!-- 确认验收后弹出评价框 -->
+          <button class="btn btn-ok" onclick="completeAndReview()">✅ 确认验收</button>
         {% endif %}
         {% if order.status=='paid' and not is_provider %}
           <button class="btn btn-d" onclick="doAct('/order/{{ order.id }}/cancel','确认取消订单？')">取消订单</button>
@@ -126,6 +137,7 @@
       </div>
     </div>
 
+    <!-- 服务进度 -->
     {% if steps %}
     <div class="ocard">
       <div style="font-weight:600;margin-bottom:1.25rem">📌 服务进度</div>
@@ -138,8 +150,8 @@
           <div class="step-dot"></div>
           <div>
             <span class="step-name">{{ step }}</span>
-            {% if done %}<span class="step-tag" style="background:rgba(62,207,170,.15);color:var(--C)">已完成</span>
-            {% elif active %}<span class="step-tag" style="background:rgba(91,141,239,.15);color:var(--A)">进行中</span>{% endif %}
+            {% if done %}<span class="step-tag" style="background:rgba(24,180,142,.12);color:var(--C)">已完成</span>
+            {% elif active %}<span class="step-tag" style="background:rgba(74,120,229,.12);color:var(--A)">进行中</span>{% endif %}
           </div>
         </div>
         {% endfor %}
@@ -150,6 +162,7 @@
     </div>
     {% endif %}
 
+    <!-- 订单状态时间线 -->
     <div class="ocard">
       <div style="font-weight:600;margin-bottom:1.1rem">订单状态</div>
       <div style="position:relative;padding-left:1.85rem">
@@ -168,19 +181,17 @@
       </div>
     </div>
 
-    {# ── 评价区块（已完成订单）──────────────────────────────── #}
+    <!-- 评价区块（已完成订单） -->
     {% if order.status=='completed' %}
     <div class="ocard">
       {% if order.review %}
-        {# 已评价：显示评价内容 #}
         <div style="font-weight:600;margin-bottom:.9rem">我的评价</div>
-        <div style="display:flex;gap:.4rem;margin-bottom:.45rem;color:#f5c542">{{ '★'*order.review.rating }}{{ '☆'*(5-order.review.rating) }}</div>
+        <div style="display:flex;gap:.4rem;margin-bottom:.45rem;color:#f5c742">{{ '★'*order.review.rating }}{{ '☆'*(5-order.review.rating) }}</div>
         {% if order.review.tags %}
         <div style="margin-bottom:.5rem">{% for t in order.review.tags.split(',') if t.strip() %}<span class="tag-chip on">{{ t.strip() }}</span>{% endfor %}</div>
         {% endif %}
         <p style="color:var(--text2);font-size:.86rem">{{ order.review.comment or '（无文字评价）' }}</p>
       {% elif order.user_id==current_user.id %}
-        {# 未评价买家：显示评价表单 #}
         <div style="font-weight:600;margin-bottom:.9rem">📝 评价此服务</div>
         <form method="POST" action="/order/{{ order.id }}/review" class="rev-form">
           <div class="fg">
@@ -205,7 +216,6 @@
           <button type="submit" class="btn btn-p">提交评价</button>
         </form>
       {% else %}
-        {# 卖家视角：显示买家评价（如果有） #}
         <div style="font-weight:600;margin-bottom:.9rem">买家评价</div>
         <p style="color:var(--text3);font-size:.86rem">买家暂未留下评价。</p>
       {% endif %}
@@ -215,46 +225,125 @@
   </div>
 </div>
 
-{# ── 提交交付弹窗 ──────────────────────────────────────────── #}
+<!-- ═══ 提交交付弹窗（修复：加入了缺失的 modal-bg CSS 后现在居中显示）═══ -->
 <div class="modal-bg" id="deliverModal">
-  <div class="modal" style="max-width:500px">
+  <div class="modal">
     <h3>📦 提交交付</h3>
     <p>请填写交付内容，买家验收后订单完成。</p>
-    <form id="deliverForm">
+    <div class="fg">
+      <label class="fl-label">交付说明 <span style="color:var(--B)">*</span></label>
+      <textarea id="deliverNote" class="fc" rows="5"
+        placeholder="详细描述你交付的成果、文件说明、使用方法等…" maxlength="1000"></textarea>
+    </div>
+    <div class="fg">
+      <label class="fl-label">交付链接（可选，如网盘/作品链接）</label>
+      <input type="text" id="deliverLink" class="fc" placeholder="https://…">
+    </div>
+    <div class="modal-acts">
+      <button class="btn btn-p" style="flex:1" onclick="submitDeliver()">确认提交交付</button>
+      <button class="btn btn-s" onclick="document.getElementById('deliverModal').classList.remove('on')">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 确认验收后弹出评价框 ═══ -->
+<div class="modal-bg" id="reviewModal">
+  <div class="modal">
+    <h3>🎉 验收成功！来评价一下吧</h3>
+    <p>你的评价对其他买家很有帮助，也能激励服务者继续提供优质服务。</p>
+    <form method="POST" action="/order/{{ order.id }}/review">
       <div class="fg">
-        <label class="fl-label">交付说明 <span style="color:var(--B)">*</span></label>
-        <textarea name="note" id="deliverNote" class="fc" rows="5"
-          placeholder="详细描述你交付的成果、文件说明、使用方法等…" maxlength="1000"></textarea>
+        <label class="fl-label">评分</label>
+        <div class="star-row">
+          {% for i in range(1,6) %}
+          <span class="sb2" data-v="{{ i }}" onclick="setR2({{ i }})">★</span>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="rating" id="ri2" value="5">
       </div>
       <div class="fg">
-        <label class="fl-label">交付链接（可选，如网盘/作品链接）</label>
-        <input type="text" name="link" id="deliverLink" class="fc" placeholder="https://…">
+        <label class="fl-label">快捷标签（可多选）</label>
+        <div>
+          {% for tag in ['沟通顺畅','交付及时','质量超预期','专业度高','性价比高','态度友好','如实描述'] %}
+          <label class="tag-chip" id="tc2_{{ loop.index }}">
+            <input type="checkbox" name="tags" value="{{ tag }}" style="display:none" onchange="toggleTag2(this,{{ loop.index }})">{{ tag }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl-label">评价内容（可选）</label>
+        <textarea name="comment" class="fc" rows="3" placeholder="分享你的使用体验…"></textarea>
       </div>
       <div class="modal-acts">
-        <button type="button" class="btn btn-p" style="flex:1" onclick="submitDeliver()">确认提交交付</button>
-        <button type="button" class="btn btn-s" onclick="document.getElementById('deliverModal').classList.remove('on')">取消</button>
+        <button type="submit" class="btn btn-p" style="flex:1">提交评价</button>
+        <button type="button" class="btn btn-s" onclick="skipReview()">跳过，稍后评价</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
+// 评分交互
 function setR(n){
   document.getElementById('ri').value=n;
   document.querySelectorAll('.sb').forEach((s,i)=>s.classList.toggle('on',i<n));
 }
-setR(5);
+function setR2(n){
+  document.getElementById('ri2').value=n;
+  document.querySelectorAll('.sb2').forEach((s,i)=>s.classList.toggle('on',i<n));
+}
+setR(5); setR2(5);
+
+// 初始化 .sb2 颜色
+document.querySelectorAll('.sb2').forEach(s=>{
+  s.style.cssText='font-size:1.45rem;cursor:pointer;color:var(--border);transition:.15s';
+});
+function setR2(n){
+  document.getElementById('ri2').value=n;
+  document.querySelectorAll('.sb2').forEach((s,i)=>{
+    s.style.color=i<n?'#f5c742':'var(--border)';
+  });
+}
+setR2(5);
 
 function toggleTag(cb,idx){
   document.getElementById('tc_'+idx).classList.toggle('on',cb.checked);
 }
+function toggleTag2(cb,idx){
+  document.getElementById('tc2_'+idx).classList.toggle('on',cb.checked);
+}
 
+// 普通操作
 async function doAct(url,msg){
   if(!confirm(msg))return;
   const r=await fetch(url,{method:'POST'});
   const d=await r.json();
-  alert(d.msg);
-  if(d.ok)location.reload();
+  if(d.ok){
+    alert(d.msg);
+    location.reload();
+  } else {
+    alert(d.msg||'操作失败');
+  }
+}
+
+// 确认验收 → 弹出评价框
+async function completeAndReview(){
+  if(!confirm('确认验收并完成订单？完成后将无法撤销。'))return;
+  const r=await fetch('/order/{{ order.id }}/complete',{method:'POST'});
+  const d=await r.json();
+  if(d.ok){
+    // 验收成功后弹出评价框
+    document.getElementById('reviewModal').classList.add('on');
+  } else {
+    alert(d.msg||'操作失败');
+  }
+}
+
+// 跳过评价直接刷新
+function skipReview(){
+  document.getElementById('reviewModal').classList.remove('on');
+  location.reload();
 }
 
 function setStep(idx){
@@ -263,12 +352,14 @@ function setStep(idx){
   fetch('/order/{{ order.id }}/step',{method:'POST',body:fd}).then(r=>r.json()).then(()=>location.reload());
 }
 
-// 关闭弹窗点击背景
-document.getElementById('deliverModal')?.addEventListener('click',e=>{
-  if(e.target===e.currentTarget)e.currentTarget.classList.remove('on');
+// 点背景关闭弹窗
+['deliverModal','reviewModal'].forEach(id=>{
+  document.getElementById(id)?.addEventListener('click',e=>{
+    if(e.target===e.currentTarget)e.currentTarget.classList.remove('on');
+  });
 });
 
-// 提交交付（带交付说明）
+// 提交交付
 async function submitDeliver(){
   const note=document.getElementById('deliverNote').value.trim();
   const link=document.getElementById('deliverLink').value.trim();
