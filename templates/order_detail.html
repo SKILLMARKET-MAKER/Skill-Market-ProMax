@@ -31,16 +31,17 @@
 .rev-form{background:var(--bg2);border-radius:12px;padding:1.1rem}
 .tag-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .75rem;border-radius:20px;font-size:.78rem;cursor:pointer;border:1px solid var(--border);color:var(--text2);transition:.2s;margin:.2rem .2rem 0 0}
 .tag-chip.on{border-color:var(--A);color:var(--A);background:rgba(74,120,229,.1)}
-
-/* 交付物卡片 */
 .deliver-card{background:linear-gradient(120deg,rgba(24,180,142,.08),rgba(74,120,229,.05));border:1px solid rgba(24,180,142,.3);border-radius:12px;padding:1.1rem;margin-bottom:1.4rem}
 .deliver-card .dc-hd{display:flex;align-items:center;gap:.5rem;font-weight:600;margin-bottom:.75rem;color:var(--C)}
 .deliver-card .dc-note{font-size:.88rem;color:var(--text2);line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .deliver-card .dc-link{display:inline-flex;align-items:center;gap:.35rem;margin-top:.65rem;font-size:.83rem;color:var(--A);text-decoration:underline;text-underline-offset:3px}
-
-/* 待验收提示 */
 .confirm-hint{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:.85rem 1.1rem;margin-bottom:1.4rem;font-size:.85rem;display:flex;align-items:flex-start;gap:.6rem;color:#92400e}
-
+/* 卖家引导卡 */
+.provider-guide{background:linear-gradient(120deg,rgba(74,120,229,.07),rgba(91,141,239,.04));border:1px solid rgba(74,120,229,.2);border-radius:12px;padding:1.1rem;margin-bottom:1.4rem}
+.provider-guide .pg-hd{font-weight:600;color:var(--A);margin-bottom:.65rem;display:flex;align-items:center;gap:.4rem}
+.provider-guide .pg-steps{display:flex;flex-direction:column;gap:.5rem}
+.provider-guide .pg-step{display:flex;align-items:flex-start;gap:.6rem;font-size:.85rem;color:var(--text2)}
+.provider-guide .pg-num{width:20px;height:20px;border-radius:50%;background:var(--A);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:.1rem}
 /* 弹窗 */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:500;display:none;align-items:center;justify-content:center;padding:1rem}
 .modal-bg.on{display:flex;animation:fadeIn .2s ease}
@@ -56,7 +57,7 @@
 <div class="wrap">
   <div class="od-wrap">
 
-    <!-- 订单主信息卡片 -->
+    <!-- 订单主卡片 -->
     <div class="ocard">
       <div class="oh">
         <div>
@@ -87,11 +88,36 @@
       <div class="ig">
         <div class="ii"><div class="il">下单时间</div><div class="iv">{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</div></div>
         <div class="ii"><div class="il">订单金额</div><div class="iv" style="color:var(--B)">¥{{ "%.2f"|format(order.price) }}</div></div>
-        {% if order.provider_rel %}<div class="ii"><div class="il">服务提供者</div><div class="iv">{{ order.provider_rel.name }}</div></div>{% endif %}
-        {% if order.note %}<div class="ii" style="grid-column:1/-1"><div class="il">买家备注</div><div class="iv" style="font-size:.82rem;color:var(--text2)">{{ order.note }}</div></div>{% endif %}
+        {% if is_provider %}
+          {% if order.buyer %}
+          <div class="ii"><div class="il">买家</div><div class="iv">{{ order.buyer.username }}</div></div>
+          {% endif %}
+        {% else %}
+          {% if order.provider_rel %}
+          <div class="ii"><div class="il">服务提供者</div><div class="iv">{{ order.provider_rel.name }}</div></div>
+          {% endif %}
+        {% endif %}
+        {% if order.note %}
+        <div class="ii" style="grid-column:1/-1">
+          <div class="il">{% if is_provider %}买家备注{% else %}我的备注{% endif %}</div>
+          <div class="iv" style="font-size:.85rem;color:var(--text2);background:rgba(245,158,11,.07);padding:.5rem .65rem;border-radius:8px;border-left:3px solid rgba(245,158,11,.4)">{{ order.note }}</div>
+        </div>
+        {% endif %}
       </div>
 
-      <!-- 交付物展示（买家和卖家均可见） -->
+      {# 卖家引导卡：进行中时显示 #}
+      {% if is_provider and order.status == 'in_progress' %}
+      <div class="provider-guide">
+        <div class="pg-hd">🔧 服务进行中 — 完成流程指引</div>
+        <div class="pg-steps">
+          <div class="pg-step"><div class="pg-num">1</div><span>查看上方<strong>买家备注</strong>，了解具体需求和期望</span></div>
+          <div class="pg-step"><div class="pg-num">2</div><span>点击下方<strong>「联系买家」</strong>，通过聊天与买家沟通细节</span></div>
+          <div class="pg-step"><div class="pg-num">3</div><span>完成服务后，点击<strong>「提交交付成果」</strong>填写说明和链接</span></div>
+        </div>
+      </div>
+      {% endif %}
+
+      {# 交付物展示 #}
       {% if order.status in ['delivered','completed'] and order.deliver_note %}
       <div class="deliver-card">
         <div class="dc-hd">📬 服务者的交付内容</div>
@@ -105,7 +131,7 @@
       </div>
       {% endif %}
 
-      <!-- 待验收提示（仅买家可见） -->
+      {# 待验收提示（仅买家）#}
       {% if order.status=='delivered' and order.user_id==current_user.id %}
       <div class="confirm-hint">
         <span>💡</span>
@@ -122,7 +148,7 @@
           <button class="btn btn-ok" onclick="doAct('/order/{{ order.id }}/start','确认开始服务？')">▶️ 开始服务</button>
         {% endif %}
         {% if order.status=='in_progress' and is_provider %}
-          <button class="btn btn-p" onclick="document.getElementById('deliverModal').classList.add('on')">📦 提交交付</button>
+          <button class="btn btn-p" onclick="document.getElementById('deliverModal').classList.add('on')">📦 提交交付成果</button>
         {% endif %}
         {% if order.status=='delivered' and order.user_id==current_user.id %}
           <button class="btn btn-ok" onclick="completeAndReview()">✅ 确认验收</button>
@@ -145,7 +171,7 @@
       <div style="font-weight:600;margin-bottom:1.25rem">📌 服务进度</div>
       <div class="steps-wrap">
         {% for step in steps %}
-        {% set done = loop.index0 < order.current_step %}
+        {% set done   = loop.index0 < order.current_step %}
         {% set active = loop.index0 == order.current_step and order.status in ['in_progress','delivered'] %}
         <div class="step-row {{ 'done' if done else ('active' if active else '') }}"
              {% if is_provider and order.status=='in_progress' %}onclick="setStep({{ loop.index }})" style="cursor:pointer"{% endif %}>
@@ -159,7 +185,7 @@
         {% endfor %}
       </div>
       {% if is_provider and order.status=='in_progress' %}
-      <p style="font-size:.72rem;color:var(--text3);margin-top:.9rem">💡 点击步骤标记完成进度</p>
+      <p style="font-size:.72rem;color:var(--text3);margin-top:.9rem">💡 点击步骤可标记完成进度</p>
       {% endif %}
     </div>
     {% endif %}
@@ -170,24 +196,26 @@
       <div style="position:relative;padding-left:1.85rem">
         <div style="position:absolute;left:6px;top:0;bottom:0;width:2px;background:var(--border)"></div>
         {% for label,cond in [
-          ('订单已创建', True),
-          ('等待支付',   order.status in ['paid','in_progress','delivered','completed']),
-          ('服务进行中', order.status in ['in_progress','delivered','completed']),
+          ('订单已创建',    True),
+          ('买家已支付',    order.status in ['paid','in_progress','delivered','completed']),
+          ('服务进行中',    order.status in ['in_progress','delivered','completed']),
           ('已交付/待验收', order.status in ['delivered','completed']),
-          ('服务已完成', order.status=='completed')] %}
+          ('服务已完成',    order.status=='completed')] %}
         <div style="position:relative;padding-bottom:1.1rem">
-          <div style="position:absolute;left:-1.55rem;top:5px;width:11px;height:11px;border-radius:50%;background:{{ 'var(--C)' if cond else 'var(--bg3)' }};border:2px solid {{ 'var(--C)' if cond else 'var(--border)' }};transition:.3s"></div>
+          <div style="position:absolute;left:-1.55rem;top:5px;width:11px;height:11px;border-radius:50%;
+            background:{{ 'var(--C)' if cond else 'var(--bg3)' }};
+            border:2px solid {{ 'var(--C)' if cond else 'var(--border)' }};transition:.3s"></div>
           <div style="font-size:.88rem;font-weight:{{ '500' if cond else '400' }};color:{{ 'var(--text)' if cond else 'var(--text3)' }}">{{ label }}</div>
         </div>
         {% endfor %}
       </div>
     </div>
 
-    <!-- 评价区块（已完成订单） -->
+    <!-- 评价区块 -->
     {% if order.status=='completed' %}
     <div class="ocard">
       {% if order.review %}
-        <div style="font-weight:600;margin-bottom:.9rem">我的评价</div>
+        <div style="font-weight:600;margin-bottom:.9rem">{% if is_provider %}买家评价{% else %}我的评价{% endif %}</div>
         <div style="display:flex;gap:.4rem;margin-bottom:.45rem;color:#f5c742">{{ '★'*order.review.rating }}{{ '☆'*(5-order.review.rating) }}</div>
         {% if order.review.tags %}
         <div style="margin-bottom:.5rem">{% for t in order.review.tags.split(',') if t.strip() %}<span class="tag-chip on">{{ t.strip() }}</span>{% endfor %}</div>
@@ -198,7 +226,7 @@
         <form method="POST" action="/order/{{ order.id }}/review" class="rev-form">
           <div class="fg">
             <label class="fl-label">评分</label>
-            <div class="star-row" id="stars1">{% for i in range(1,6) %}<span class="sb" data-v="{{ i }}" onclick="setR({{ i }})">★</span>{% endfor %}</div>
+            <div class="star-row">{% for i in range(1,6) %}<span class="sb" data-v="{{ i }}" onclick="setR({{ i }})">★</span>{% endfor %}</div>
             <input type="hidden" name="rating" id="ri" value="5">
           </div>
           <div class="fg">
@@ -217,7 +245,7 @@
           </div>
           <button type="submit" class="btn btn-p">提交评价</button>
         </form>
-      {% else %}
+      {% elif is_provider %}
         <div style="font-weight:600;margin-bottom:.9rem">买家评价</div>
         <p style="color:var(--text3);font-size:.86rem">买家暂未留下评价。</p>
       {% endif %}
@@ -230,8 +258,8 @@
 <!-- 提交交付弹窗 -->
 <div class="modal-bg" id="deliverModal">
   <div class="modal">
-    <h3>📦 提交交付</h3>
-    <p>请填写交付内容，买家验收后订单完成。</p>
+    <h3>📦 提交交付成果</h3>
+    <p>填写完成后买家将收到通知，确认验收后订单完成。</p>
     <div class="fg">
       <label class="fl-label">交付说明 <span style="color:var(--B)">*</span></label>
       <textarea id="deliverNote" class="fc" rows="5"
@@ -248,7 +276,7 @@
   </div>
 </div>
 
-<!-- 确认验收后弹出评价框 -->
+<!-- 验收后评价弹窗 -->
 <div class="modal-bg" id="reviewModal">
   <div class="modal">
     <h3>🎉 验收成功！来评价一下吧</h3>
@@ -256,11 +284,7 @@
     <form method="POST" action="/order/{{ order.id }}/review">
       <div class="fg">
         <label class="fl-label">评分</label>
-        <div class="star-row" id="stars2">
-          {% for i in range(1,6) %}
-          <span class="sb2" data-v="{{ i }}" onclick="setR2({{ i }})">★</span>
-          {% endfor %}
-        </div>
+        <div class="star-row">{% for i in range(1,6) %}<span class="sb2" data-v="{{ i }}" onclick="setR2({{ i }})">★</span>{% endfor %}</div>
         <input type="hidden" name="rating" id="ri2" value="5">
       </div>
       <div class="fg">
@@ -286,77 +310,53 @@
 </div>
 
 <script>
-// ── 评分：页面内联表单（.sb） ──
 function setR(n) {
   document.getElementById('ri').value = n;
   document.querySelectorAll('.sb').forEach((s, i) => s.classList.toggle('on', i < n));
 }
-setR(5); // 默认5星
-
-// ── 评分：验收后弹窗（.sb2） ──
 function setR2(n) {
   document.getElementById('ri2').value = n;
   document.querySelectorAll('.sb2').forEach((s, i) => s.classList.toggle('on', i < n));
 }
-setR2(5); // 默认5星
+setR(5); setR2(5);
 
-// ── 标签切换 ──
-function toggleTag(cb, idx) {
-  document.getElementById('tc_' + idx).classList.toggle('on', cb.checked);
-}
-function toggleTag2(cb, idx) {
-  document.getElementById('tc2_' + idx).classList.toggle('on', cb.checked);
-}
+function toggleTag(cb, idx)  { document.getElementById('tc_'  + idx).classList.toggle('on', cb.checked); }
+function toggleTag2(cb, idx) { document.getElementById('tc2_' + idx).classList.toggle('on', cb.checked); }
 
-// ── 通用操作（支付/取消/开始服务等） ──
 async function doAct(url, msg) {
   if (!confirm(msg)) return;
   const r = await fetch(url, { method: 'POST' });
   const d = await r.json();
-  if (d.ok) {
-    alert(d.msg);
-    location.reload();
-  } else {
-    alert(d.msg || '操作失败');
-  }
+  if (d.ok) { alert(d.msg); location.reload(); }
+  else { alert(d.msg || '操作失败'); }
 }
 
-// ── 确认验收 → 弹出评价框 ──
 async function completeAndReview() {
   if (!confirm('确认验收并完成订单？完成后将无法撤销。')) return;
   const r = await fetch('/order/{{ order.id }}/complete', { method: 'POST' });
   const d = await r.json();
-  if (d.ok) {
-    document.getElementById('reviewModal').classList.add('on');
-  } else {
-    alert(d.msg || '操作失败');
-  }
+  if (d.ok) { document.getElementById('reviewModal').classList.add('on'); }
+  else { alert(d.msg || '操作失败'); }
 }
 
-// ── 跳过评价，直接刷新 ──
 function skipReview() {
   document.getElementById('reviewModal').classList.remove('on');
   location.reload();
 }
 
-// ── 步骤进度标记 ──
 function setStep(idx) {
   if (!confirm('标记步骤 ' + idx + ' 完成？')) return;
-  const fd = new FormData();
-  fd.append('step', idx);
+  const fd = new FormData(); fd.append('step', idx);
   fetch('/order/{{ order.id }}/step', { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(() => location.reload());
+    .then(r => r.json()).then(() => location.reload());
 }
 
-// ── 点击弹窗背景关闭 ──
 ['deliverModal', 'reviewModal'].forEach(id => {
   document.getElementById(id)?.addEventListener('click', e => {
     if (e.target === e.currentTarget) e.currentTarget.classList.remove('on');
   });
 });
 
-// ── 提交交付 ──
 async function submitDeliver() {
   const note = document.getElementById('deliverNote').value.trim();
   const link = document.getElementById('deliverLink').value.trim();
@@ -366,10 +366,11 @@ async function submitDeliver() {
   if (link) fd.append('link', link);
   const r = await fetch('/order/{{ order.id }}/deliver', { method: 'POST', body: fd });
   const d = await r.json();
-  alert(d.msg);
   if (d.ok) {
     document.getElementById('deliverModal').classList.remove('on');
     location.reload();
+  } else {
+    alert(d.msg || '提交失败');
   }
 }
 </script>
