@@ -63,7 +63,7 @@
         <div class="svc-body">
           <h1 class="svc-title">{{ service.title }}</h1>
           <div class="meta-row">
-            <div class="mi"><span class="s">★</span><strong>{{ "%.1f"|format(service.rating) }}</strong><span>({{ service.review_count }}条评价)</span></div>
+            <div class="mi"><span class="s">★</span><strong>{{ "%.1f"|format(service.rating) }}</strong><span>({{ reviews|length }}条评价)</span></div>
             <div class="mi">📦 {{ service.order_count }} 次订购</div>
             <div class="mi">🏷️ {{ service.category }}</div>
             {% if service.delivery_time %}<div class="mi">⏱️ {{ service.delivery_time }}</div>{% endif %}
@@ -109,7 +109,7 @@
       {% endif %}
 
       <div class="rev-sec">
-        <div style="font-weight:600;margin-bottom:1rem">用户评价（{{ service.review_count }}）</div>
+        <div style="font-weight:600;margin-bottom:1rem">用户评价（{{ reviews|length }}）</div>
         {% if reviews %}
           {% for r in reviews %}
           <div class="rev">
