@@ -849,13 +849,10 @@ if __name__ == '__main__':
         seed()
     print('\n' + '═'*50)
     print('  🚀  SkillMarket 已启动！')
-    print('  🌐  http://127.0.0.1:5000')
-    print('  👑  管理员: admin@skillmarket.com / admin123')
-    print('  💼  提供者: zhang@example.com / pass123')
-    print('  🛍️   用户:  user1@example.com / pass123')
+    print('  🌐  Railway 部署中...')
     print('═'*50 + '\n')
-    # 仅修改这一行：app.run → socketio.run，其他完全不变
-    socketio.run(app, debug=True, port=5000)
+    # 生产环境用 Railway 的 Gunicorn 启动，这里可以直接 pass
+    pass
 # ===================== 音视频通话 实时通知 =====================
 # 用户连接绑定
 @socketio.on('connect')
