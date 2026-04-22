@@ -40,7 +40,7 @@ class Provider(db.Model):
     skills = db.Column(db.Text, default='')
     rating = db.Column(db.Float, default=5.0)
     location = db.Column(db.String(100), default='')
-    user = db.relationship('User', backref='provider_profile')
+    user = db.relationship('User', backref=db.backref('provider_profile', uselist=False))
     services = db.relationship('Service', backref='provider', lazy=True)
 
 class Service(db.Model):
