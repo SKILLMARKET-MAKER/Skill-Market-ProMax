@@ -195,6 +195,6 @@ async function poll() {
     });
   } catch(e) { /* 网络抖动，静默忽略 */ }
 }
-setInterval(poll, 1500);
+setInterval(poll, 1000);
 </script>
 {% endblock %}
