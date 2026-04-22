@@ -57,6 +57,7 @@
 </style>
 <!-- 音视频SDK -->
 <script src="https://storage.zego.im/zegowebsdk/js/4.17.0/ZegoExpressWeb-min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 {% endblock %}
 {% block content %}
 <div class="wrap" style="max-width:720px;margin:0 auto;padding-top:1.25rem">
@@ -137,7 +138,7 @@ let lastId = {{ messages[-1].id if messages else 0 }};
 const list = document.getElementById('msgList');
 const txt  = document.getElementById('msgTxt');
 
-// 原有聊天逻辑
+// 原有聊天逻辑（完全保留）
 function fmtTime(utcStr) {
   const d = new Date(utcStr.includes('Z') ? utcStr : utcStr + 'Z');
   const now = new Date();
@@ -207,43 +208,96 @@ async function poll() {
 }
 setInterval(poll, 1000);
 
-// ==================== 新增：视频/语音通话逻辑 ====================
+// ==================== 修复：视频/语音通话逻辑（按钮点击生效） ====================
+// 1. 初始化Socket.IO客户端（适配Railway）
+const socket = io({
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 5
+});
+
+// 2. 初始化ZEGO引擎（替换成你的AppID）
+const ZEGO_APPID = 你的数字AppID; // 替换成你自己的AppID（数字）
 const zg = new ZegoExpressEngine();
-let roomId = "{{ current_user.id }}_{{ target.id }}";
+zg.init(ZEGO_APPID, {
+  userID: ME.toString(),
+  userName: "{{ current_user.username }}"
+});
+
+let roomId = `room_${ME}_${TGT}`;
 let callType = 1;
 let isCalling = false;
 
-// 发起通话
+// 核心函数：点击按钮会执行的代码（修复后）
 async function startCall(type) {
-  callType = type; isCalling = true;
   try {
-    await zg.loginRoom(roomId, 0, {userID: ME.toString(), userName: "{{ current_user.username }}"});
-    const localStream = await zg.createStream({camera: {video: type, audio: true}});
+    callType = type;
+    isCalling = true;
+    alert(`正在发起${type === 1 ? '视频' : '语音'}通话，请允许摄像头/麦克风权限！`);
+    
+    // 初始化本地流
+    const localStream = await zg.createStream({
+      camera: { video: type, audio: true }
+    });
     document.getElementById("localVideo").srcObject = localStream;
-    zg.startPublishingStream("local", localStream);
+    
+    // 登录房间
+    await zg.loginRoom(roomId, 0, {
+      userID: ME.toString(),
+      userName: "{{ current_user.username }}"
+    });
+    
+    // 发布流
+    zg.startPublishingStream("local_stream", localStream);
+    
+    // 显示通话界面
     document.getElementById("callScreen").style.display = "block";
-  } catch (e) { alert("请允许摄像头/麦克风权限！"); }
+    
+    // 通知对方
+    socket.emit('call', {
+      to: TGT,
+      type: type,
+      room: roomId
+    });
+  } catch (e) {
+    console.error("通话失败:", e);
+    alert("无法发起通话，请检查权限或网络！");
+  }
 }
 
-// 接听
+// 接听来电
 async function answerCall() {
   document.getElementById("callModal").style.display = "none";
-  await zg.loginRoom(roomId, 0, {userID: ME.toString(), userName: "{{ current_user.username }}"});
-  const localStream = await zg.createStream({camera: {video: callType, audio: true}});
-  document.getElementById("localVideo").srcObject = localStream;
-  zg.startPublishingStream("local", localStream);
-  document.getElementById("callScreen").style.display = "block";
-  zg.on("roomStreamUpdate", (roomID, updateType, streamList) => {
-    if(updateType === "ADD") zg.startPlayingStream(streamList[0], document.getElementById("remoteVideo"));
-  });
+  try {
+    await zg.loginRoom(roomId, 0, {
+      userID: ME.toString(),
+      userName: "{{ current_user.username }}"
+    });
+    const localStream = await zg.createStream({
+      camera: { video: callType, audio: true }
+    });
+    document.getElementById("localVideo").srcObject = localStream;
+    zg.startPublishingStream("local_stream", localStream);
+    document.getElementById("callScreen").style.display = "block";
+    
+    // 监听对方流
+    zg.on("roomStreamUpdate", (roomID, updateType, streamList) => {
+      if(updateType === "ADD") {
+        zg.startPlayingStream(streamList[0].streamID, document.getElementById("remoteVideo"));
+      }
+    });
+  } catch(e) {
+    alert("接听失败！");
+  }
 }
 
-// 拒绝
+// 拒绝来电
 function rejectCall() {
   document.getElementById("callModal").style.display = "none";
+  socket.emit('reject', { to: TGT });
 }
 
-// 挂断
+// 挂断通话
 function hangupCall() {
   zg.logoutRoom(roomId);
   document.getElementById("callScreen").style.display = "none";
@@ -255,8 +309,9 @@ function toggleMic() { zg.muteMicrophone(!zg.isMicrophoneMuted()); }
 function toggleCamera() { zg.muteCamera(!zg.isCameraMuted()); }
 
 // 监听来电
-socket?.on("incomingCall", data => {
+socket.on("incomingCall", data => {
   callType = data.type;
+  roomId = data.room;
   document.getElementById("callType").textContent = data.type === 1 ? "视频通话..." : "语音通话...";
   document.getElementById("callModal").style.display = "flex";
 });
