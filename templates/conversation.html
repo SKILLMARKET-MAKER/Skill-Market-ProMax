@@ -10,30 +10,26 @@
 .chat-outer{display:flex;flex-direction:column;height:calc(100vh - 220px);min-height:440px}
 .chat-hd{padding:.9rem 1.25rem;border-bottom:1px solid rgba(74, 108, 243, 0.08);display:flex;align-items:center;gap:.9rem;flex-shrink:0;background:#ffffff}
 .chat-msgs{flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:.85rem;background:#f8faff}
-/* 关键1：.msg-row 新增 align-items: flex-start，避免内容垂直对齐影响宽度 */
 .msg-row{display:flex;gap:.65rem;align-items:flex-start;animation:msgIn .2s ease;width:100%}
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .msg-row.me{flex-direction:row-reverse}
 .msg-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.75rem;flex-shrink:0;color:#fff;margin-top:4px}
-/* 核心修复：重构.bubble样式，解决换行和宽度问题 */
+/* ✅ 核心微调：仅修改宽度，满足一行10个汉字+，超长自动换行 */
 .bubble{
-  max-width:min(66%, 480px); /* 最大宽度限制 */
-  min-width:60px; /* 最小宽度，避免气泡过窄 */
+  max-width:min(85%, 600px); /* 调大最大宽度：一行能容纳更多文字 */
+  min-width:120px; /* 关键：最小宽度120px，足够放下10+汉字，彻底解决3字就换行 */
   padding:.65rem 1rem;
   border-radius:16px;
   font-size:.88rem;
   line-height:1.55;
-  /* 关键2：替换换行规则，只保留必要的自动换行，不强制保留原始换行 */
   white-space: normal;
-  word-break: break-all;
-  /* 关键3：让气泡以inline-block展示，完美自适应内容宽度 */
+  word-break: break-word; /* 优化：仅超长时换行，不强制拆分汉字/英文 */
   display: inline-block;
   vertical-align: bottom;
 }
 .bubble.them{background:#ffffff;border:1px solid rgba(74, 108, 243, 0.1);border-bottom-left-radius:4px;color:#1e293b}
 .bubble.me{background:linear-gradient(120deg,#4a6cf3,#7aa8f5);color:#fff;border-bottom-right-radius:4px;box-shadow:0 4px 16px rgba(74, 108, 243, 0.25)}
 .msg-time{font-size:.68rem;color:#94a3b8;margin-bottom:3px;display:block}
-/* 关键4：给气泡外层容器加样式，确保inline-block生效 */
 .bubble-wrap{
   display: inline-block;
   max-width: 100%;
@@ -68,7 +64,6 @@
         <div class="msg-av" style="background:linear-gradient(135deg,{{ '#4a6cf3,#f15bb5' if me else '#06d6a0,#4a6cf3' }})">
           {{ (current_user.username if me else target.username)[0].upper() }}
         </div>
-        <!-- 关键5：新增.bubble-wrap容器，包裹时间和气泡 -->
         <div style="display:flex;flex-direction:column;{{ 'align-items:flex-end' if me else 'align-items:flex-start' }}">
           <div class="msg-time" style="{{ 'text-align:right' if me }}"
                data-utc="{{ m.created_at.strftime('%Y-%m-%dT%H:%M:%S') }}"></div>
@@ -148,10 +143,9 @@ document.querySelectorAll('.msg-time[data-utc]').forEach(el => {
 function scrollBot() { list.scrollTop = list.scrollHeight; }
 scrollBot();
 
-// 关键6：修改esc函数，只保留必要的换行（移除多余的强制换行）
 function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-          .replace(/\n{2,}/g,'<br><br>') // 只保留连续换行，单个换行替换为空格
+          .replace(/\n{2,}/g,'<br><br>')
           .replace(/\n/g,' ');
 }
 
@@ -164,7 +158,6 @@ function addBubble(m, utcStr) {
   row.className = 'msg-row' + (me ? ' me' : '');
   if (m.id) row.dataset.id = m.id;
 
-  // 关键7：新增bubble-wrap容器
   row.innerHTML =
     `<div class="msg-av" style="background:linear-gradient(135deg,${me ? '#4a6cf3,#f15bb5' : '#06d6a0,#4a6cf3'})">${init}</div>` +
     `<div style="display:flex;flex-direction:column;${me ? 'align-items:flex-end' : 'align-items:flex-start'}">` +
