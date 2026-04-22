@@ -5,3 +5,5 @@ flask-wtf
 wtforms
 pillow
 gunicorn
+flask-socketio
+eventlet==0.33.3
