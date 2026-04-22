@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -6,6 +7,8 @@ from datetime import datetime
 import os
 
 app = Flask(__name__)
+# 初始化实时通信（通话来电通知用）
+socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'skillmarket-threementogether-2026')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///skillmarket.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -851,4 +854,21 @@ if __name__ == '__main__':
     print('  💼  提供者: zhang@example.com / pass123')
     print('  🛍️   用户:  user1@example.com / pass123')
     print('═'*50 + '\n')
-    app.run(debug=True, port=5000)
+    # 仅修改这一行：app.run → socketio.run，其他完全不变
+    socketio.run(app, debug=True, port=5000)
+# ===================== 音视频通话 实时通知 =====================
+# 用户连接绑定
+@socketio.on('connect')
+def handle_connect():
+    if current_user.is_authenticated:
+        socketio.server.enter_room(request.sid, f"user_{current_user.id}")
+
+# 发起通话
+@socketio.on('call')
+def handle_call(data):
+    emit('incomingCall', {'type': data['type']}, room=f"user_{data['to']}")
+
+# 拒绝通话
+@socketio.on('reject')
+def handle_reject(data):
+    emit('callRejected', {}, room=f"user_{data['to']}")
