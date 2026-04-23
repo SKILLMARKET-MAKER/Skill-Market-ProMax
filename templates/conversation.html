@@ -185,14 +185,27 @@ async function send() {
 document.getElementById('sendBtn').addEventListener('click', send);
 txt.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
 txt.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
+// ── 实时收消息（Socket.IO，毫秒级）──
+socket.on('newMessage', m => {
+  if (m.sender_id !== ME) {
+    addBubble(m, m.created_at);
+    if (m.id > lastId) lastId = m.id;
+  }
+});
+
+// ── 保底轮询（网络断线恢复用，降低频率到5秒）──
 async function poll() {
   try {
     const res = await fetch('/api/messages/' + TGT + '/poll?since=' + lastId);
-    if (!res.ok) return; const msgs = await res.json();
-    msgs.forEach(m => { if (m.sender_id !== ME) addBubble(m, m.created_at); if (m.id > lastId) lastId = m.id; });
+    if (!res.ok) return;
+    const msgs = await res.json();
+    msgs.forEach(m => {
+      if (m.sender_id !== ME) addBubble(m, m.created_at);
+      if (m.id > lastId) lastId = m.id;
+    });
   } catch(e) {}
 }
-setInterval(poll, 1000);
+setInterval(poll, 5000); // 从1秒改为5秒，仅作断线保底
 
 // ══════════════════════════════════════════
 // 音视频通话
