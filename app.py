@@ -1,59 +1,27 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_socketio import SocketIO, emit, join_room
+from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
-from functools import wraps
 
-# 初始化Flask应用
 app = Flask(__name__)
-# 适配Railway部署，读取环境变量配置
+# 初始化实时通信（通话来电通知用）
+socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'skillmarket-threementogether-2026')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///skillmarket.db').replace('postgres://', 'postgresql://')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///skillmarket.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# 修复SQLite多线程访问问题
-if 'sqlite://' in app.config['SQLALCHEMY_DATABASE_URI']:
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'connect_args': {'check_same_thread': False}}
-
-# 修复SocketIO初始化，适配Gunicorn和Railway部署
-socketio = SocketIO(
-    app,
-    cors_allowed_origins="*",
-    async_mode='eventlet',
-    logger=False,
-    engineio_logger=False,
-    ping_timeout=60,
-    ping_interval=25,
-    reconnection=True,
-    reconnection_attempts=5,
-    reconnection_delay=1000
-)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = '请先登录'
 
-# 全局变量，控制数据库仅初始化一次，避免多worker重复执行
-DB_INITIALIZED = False
-
-# 全局异常捕获，避免500白页
-@app.errorhandler(500)
-def internal_server_error(e):
-    app.logger.error(f'服务器内部错误: {str(e)}', exc_info=True)
-    flash('服务器开小差了，请稍后重试', 'error')
-    return redirect(request.referrer or url_for('index'))
-
-@app.errorhandler(404)
-def page_not_found(e):
-    flash('您访问的页面不存在', 'error')
-    return redirect(url_for('index'))
-
 # ══════════════════════════════════════════
 # 数据模型
 # ══════════════════════════════════════════
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -109,9 +77,11 @@ class Order(db.Model):
     price = db.Column(db.Float)
     hours = db.Column(db.Float, default=1)
     note = db.Column(db.Text, default='')
-    deliver_note = db.Column(db.Text, default='')
-    deliver_link = db.Column(db.String(500), default='')
-    delivered_at = db.Column(db.DateTime, nullable=True)
+    # ── 新增：交付物字段 ──────────────────────────────────
+    deliver_note = db.Column(db.Text, default='')   # 卖家填写的交付说明
+    deliver_link = db.Column(db.String(500), default='')  # 交付链接（可选）
+    delivered_at = db.Column(db.DateTime, nullable=True)  # 交付时间
+    # ─────────────────────────────────────────────────────
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     payment = db.relationship('Payment', backref='order', uselist=False)
@@ -131,7 +101,7 @@ class Review(db.Model):
     __tablename__ = 'reviews'
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), unique=True)
-    service_id = db.Column(db.Integer, db.ForeignKey('services.id'), nullable=True)
+    service_id = db.Column(db.Integer, db.ForeignKey('services.id'), nullable=True)  # ── 新增：关联服务
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     provider_id = db.Column(db.Integer, db.ForeignKey('providers.id'))
     rating = db.Column(db.Integer, nullable=False)
@@ -166,21 +136,14 @@ class Report(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# SocketIO 认证装饰器，避免匿名用户访问
-def authenticated_only(f):
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        if not current_user.is_authenticated:
-            return False
-        return f(*args, **kwargs)
-    return wrapped
-
 # ══════════════════════════════════════════
 # 常量
 # ══════════════════════════════════════════
+
 CATEGORIES = ['设计', '编程', '摄影', '语言', '音乐', '教育', '营销', '写作', '视频', '其他']
 CAT_ICONS  = {'设计':'🎨','编程':'💻','摄影':'📸','语言':'🌐','音乐':'🎵',
               '教育':'📚','营销':'📢','写作':'✍️','视频':'🎬','其他':'⭐'}
+
 REPORT_REASONS = [
     '虚假宣传 / 服务与描述严重不符',
     '诈骗 / 收款后拒绝提供服务',
@@ -194,6 +157,7 @@ REPORT_REASONS = [
 # ══════════════════════════════════════════
 # 路由
 # ══════════════════════════════════════════
+
 @app.route('/')
 def index():
     featured  = Service.query.filter_by(is_active=True).order_by(Service.order_count.desc()).limit(8).all()
@@ -286,11 +250,14 @@ def services():
         categories=CATEGORIES, cat_icons=CAT_ICONS,
         current_category=category, sort=sort, search=search)
 
+# ── 修复：评价查询改为按 service_id，与 review_count 保持一致 ──────────────
 @app.route('/service/<int:sid>')
 def service_detail(sid):
     service = Service.query.get_or_404(sid)
+    # 按服务 id 查评价，这样数量与 service.review_count 始终匹配
     reviews = Review.query.filter_by(service_id=sid)\
                           .order_by(Review.created_at.desc()).limit(10).all()
+    # 旧数据兼容：若 service_id 字段为空（旧评价），回退到 provider 查询
     if not reviews:
         reviews = Review.query.filter_by(provider_id=service.provider_id)\
                               .order_by(Review.created_at.desc()).limit(10).all()
@@ -313,49 +280,32 @@ def create_order(sid):
     note  = request.form.get('note','')
     hours = request.form.get('hours', 1, type=float) or 1
     actual_price = service.price * hours if service.price_type == 'hourly' else service.price
-    order = Order(
-        user_id=current_user.id, 
-        service_id=service.id,
-        provider_id=service.provider_id, 
-        price=actual_price,
-        hours=hours, 
-        status='pending', 
-        note=note
-    )
+    order = Order(user_id=current_user.id, service_id=service.id,
+                  provider_id=service.provider_id, price=actual_price,
+                  hours=hours, status='pending', note=note)
     db.session.add(order); db.session.commit()
     flash('订单已创建，请完成支付 💳', 'success')
     return redirect(url_for('order_detail', oid=order.id))
 
-# 【核心修复】订单详情路由，解决联系服务者500问题
 @app.route('/order/<int:oid>')
 @login_required
 def order_detail(oid):
     order = Order.query.get_or_404(oid)
     pp = current_user.provider_profile
     is_provider = pp and pp.id == order.provider_id
-    # 权限校验
     if order.user_id != current_user.id and not is_provider and current_user.role != 'admin':
         flash('无权查看此订单', 'error')
         return redirect(url_for('my_orders'))
-    # 服务步骤处理
     steps = []
     if order.service and order.service.service_steps:
         steps = [s.strip() for s in order.service.service_steps.split('\n') if s.strip()]
-    # 【关键修复】联系对象赋值，增加多层空值判断，彻底避免AttributeError
     chat_target = None
     if is_provider:
-        # 服务者联系买家
-        if order.buyer:
-            chat_target = order.buyer
-    else:
-        # 买家联系服务者，逐层校验非空
-        if order.service and order.service.provider and order.service.provider.user:
-            chat_target = order.service.provider.user
-    return render_template('order_detail.html', 
-                           order=order, 
-                           is_provider=is_provider,
-                           steps=steps, 
-                           chat_target=chat_target,
+        chat_target = order.buyer
+    elif order.service and order.service.provider and order.service.provider.user:
+        chat_target = order.service.provider.user
+    return render_template('order_detail.html', order=order, is_provider=is_provider,
+                           steps=steps, chat_target=chat_target,
                            REPORT_REASONS=REPORT_REASONS)
 
 @app.route('/order/<int:oid>/pay', methods=['POST'])
@@ -400,7 +350,7 @@ def update_step(oid):
         db.session.commit()
     return jsonify({'ok':True,'current_step':order.current_step})
 
-# 修复交付接口字段名匹配问题
+# ── 修复：deliver 接口保存 note 和 link ──────────────────────────────────
 @app.route('/order/<int:oid>/deliver', methods=['POST'])
 @login_required
 def deliver_order(oid):
@@ -410,8 +360,8 @@ def deliver_order(oid):
         return jsonify({'ok':False,'msg':'无权操作'}), 403
     if order.status != 'in_progress':
         return jsonify({'ok':False,'msg':'当前状态不允许交付'})
-    deliver_note = request.form.get('deliver_note','').strip()
-    deliver_link = request.form.get('deliver_link','').strip()
+    deliver_note = request.form.get('note','').strip()
+    deliver_link = request.form.get('link','').strip()
     if not deliver_note:
         return jsonify({'ok':False,'msg':'请填写交付说明'})
     order.status       = 'delivered'
@@ -447,6 +397,7 @@ def cancel_order(oid):
     db.session.commit()
     return jsonify({'ok':True,'msg':'订单已取消'})
 
+# ── 修复：评价时同时写入 service_id，保证 service_detail 查询匹配 ────────
 @app.route('/order/<int:oid>/review', methods=['POST'])
 @login_required
 def add_review(oid):
@@ -462,7 +413,7 @@ def add_review(oid):
     tags    = ','.join(request.form.getlist('tags'))
     rev = Review(
         order_id=order.id,
-        service_id=order.service_id,
+        service_id=order.service_id,   # ← 新增：写入服务 id
         user_id=current_user.id,
         provider_id=order.provider_id,
         rating=rating,
@@ -470,12 +421,14 @@ def add_review(oid):
         tags=tags
     )
     db.session.add(rev)
+    # 重新统计该服务的评分（只算该服务的评价）
     svc = Service.query.get(order.service_id)
     if svc:
         all_revs = Review.query.filter_by(service_id=order.service_id).all() + [rev]
         avg = round(sum(r.rating for r in all_revs) / len(all_revs), 1)
         svc.rating       = avg
-        svc.review_count = len(all_revs)
+        svc.review_count = len(all_revs)   # ← 与 service_detail 查询数量一致
+    # 同步更新 provider 总评分
     prov = Provider.query.get(order.provider_id)
     if prov:
         prov_revs = Review.query.filter_by(provider_id=order.provider_id).all() + [rev]
@@ -521,88 +474,75 @@ def edit_profile():
     flash('资料已更新', 'success')
     return redirect(url_for('profile'))
 
-# ══ 消息 / 会话 路由修复，增加异常兜底
+# ══ 消息 / 会话 ══════════════════════════════════════════════════════
+
 @app.route('/messages')
 @login_required
 def messages():
-    sent_to = db.session.query(Message.receiver_id).filter_by(sender_id=current_user.id).distinct()
-    recv_from = db.session.query(Message.sender_id).filter_by(receiver_id=current_user.id).distinct()
+    sent_to   = db.session.query(Message.receiver_id).filter_by(sender_id=current_user.id)
+    recv_from = db.session.query(Message.sender_id).filter_by(receiver_id=current_user.id)
     uids = {r[0] for r in sent_to.all()} | {r[0] for r in recv_from.all()}
     contacts = User.query.filter(User.id.in_(uids)).all()
     info = []
     for u in contacts:
-        last_msg = Message.query.filter(
+        last = Message.query.filter(
             ((Message.sender_id==current_user.id)&(Message.receiver_id==u.id))|
             ((Message.sender_id==u.id)&(Message.receiver_id==current_user.id))
         ).order_by(Message.created_at.desc()).first()
         unread = Message.query.filter_by(sender_id=u.id, receiver_id=current_user.id, is_read=False).count()
-        info.append({'user':u,'last_msg':last_msg,'unread':unread})
+        info.append({'user':u,'last_msg':last,'unread':unread})
     info.sort(key=lambda x: x['last_msg'].created_at if x['last_msg'] else datetime.min, reverse=True)
     total_unread = Message.query.filter_by(receiver_id=current_user.id, is_read=False).count()
     return render_template('messages.html', contacts=info, total_unread=total_unread)
 
-# 对话路由修复，增加异常捕获
+# ── 修复：POST 返回消息 id；GET 渲染 conversation.html ─────────────────
 @app.route('/messages/<int:uid>', methods=['GET','POST'])
 @login_required
 def conversation(uid):
-    try:
-        target = User.query.get_or_404(uid)
-        if request.method == 'POST':
-            content = request.form.get('content','').strip()
-            if not content:
-                return jsonify({'ok':False,'msg':'消息不能为空'})
-            msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
-            db.session.add(msg)
-            db.session.commit()
-            # 实时推送给接收方
-            socketio.emit('newMessage', {
-                'id':         msg.id,
-                'content':    msg.content,
-                'sender_id':  msg.sender_id,
-                'sender_name':current_user.username,
-                'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
-            }, room=f"user_{uid}")
-            return jsonify({'ok': True, 'id': msg.id})
-        # 标记已读
-        Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
-                     .update({'is_read': True})
+    target = User.query.get_or_404(uid)
+    if request.method == 'POST':
+        content = request.form.get('content','').strip()
+        if not content:
+            return jsonify({'ok':False,'msg':'消息不能为空'})
+        msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
+        db.session.add(msg)
         db.session.commit()
-        # 查询消息
-        msgs = Message.query.filter(
-            ((Message.sender_id==current_user.id)&(Message.receiver_id==uid))|
-            ((Message.sender_id==uid)&(Message.receiver_id==current_user.id))
-        ).order_by(Message.created_at.asc()).all()
-        return render_template('conversation.html', target=target, messages=msgs)
-    except Exception as e:
-        app.logger.error(f'对话页面错误: {str(e)}', exc_info=True)
-        flash('对话加载失败，请稍后重试', 'error')
-        return redirect(url_for('messages'))
+        # ── 关键修复：返回消息 id，前端用来更新 lastId 防止轮询重复 ──
+        return jsonify({'ok':True, 'id': msg.id})
+    # GET：标记已读，返回页面
+    Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
+                 .update({'is_read':True})
+    db.session.commit()
+    msgs = Message.query.filter(
+        ((Message.sender_id==current_user.id)&(Message.receiver_id==uid))|
+        ((Message.sender_id==uid)&(Message.receiver_id==current_user.id))
+    ).order_by(Message.created_at.asc()).all()
+    return render_template('conversation.html', target=target, messages=msgs)
 
-# 轮询接口降级为3秒一次，仅兜底
+# ── 修复：轮询接口路径改为 /poll（与前端 conversation.html 一致）──────────
+# 原来是 /api/messages/<uid>/new → 现在统一为 /api/messages/<uid>/poll
 @app.route('/api/messages/<int:uid>/poll')
 @login_required
 def api_poll_messages(uid):
-    try:
-        since = request.args.get('since', type=int, default=0)
-        msgs  = Message.query.filter(
-            Message.sender_id==uid,
-            Message.receiver_id==current_user.id,
-            Message.id > since
-        ).order_by(Message.created_at.asc()).all()
-        for m in msgs:
-            m.is_read = True
-        db.session.commit()
-        return jsonify([{
-            'id':         m.id,
-            'content':    m.content,
-            'sender_id':  m.sender_id,
-            'created_at': m.created_at.strftime('%Y-%m-%dT%H:%M:%S')
-        } for m in msgs])
-    except Exception as e:
-        app.logger.error(f'消息轮询错误: {str(e)}', exc_info=True)
-        return jsonify([]), 200
+    since = request.args.get('since', type=int, default=0)
+    msgs  = Message.query.filter(
+        Message.sender_id==uid,
+        Message.receiver_id==current_user.id,
+        Message.id > since
+    ).order_by(Message.created_at.asc()).all()
+    for m in msgs:
+        m.is_read = True
+    db.session.commit()
+    return jsonify([{
+        'id':         m.id,
+        'content':    m.content,
+        'sender_id':  m.sender_id,
+        # ── 返回 UTC ISO 字符串，前端负责转本地时区显示 ──
+        'created_at': m.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+    } for m in msgs])
 
 # ══ 举报 ══
+
 @app.route('/report', methods=['GET','POST'])
 @login_required
 def report():
@@ -630,6 +570,7 @@ def report():
                            target_id=target_id, REPORT_REASONS=REPORT_REASONS)
 
 # ══ 服务提供者后台 ══
+
 @app.route('/provider/dashboard')
 @login_required
 def provider_dashboard():
@@ -653,7 +594,6 @@ def provider_dashboard():
                            provider=prov, services=svcs, orders=orders,
                            stats=stats, categories=CATEGORIES, cat_icons=CAT_ICONS)
 
-# 【关键修复】修复变量名未定义错误，解决发布服务500问题
 @app.route('/provider/service/new', methods=['GET','POST'])
 @login_required
 def new_service():
@@ -674,19 +614,10 @@ def new_service():
         s_steps    = request.form.get('service_steps','').strip()
         if not title or not desc or not price or not category:
             flash('请填写所有必填字段', 'error'); return redirect(url_for('new_service'))
-        # 修复变量名错误：pmin/pmax → price_min/price_max
-        svc = Service(
-            provider_id=prov.id, 
-            title=title, 
-            description=desc,
-            price_type=price_type, 
-            price=price, 
-            price_min=price_min,
-            price_max=price_max, 
-            category=category,
-            delivery_time=d_time, 
-            service_steps=s_steps
-        )
+        svc = Service(provider_id=prov.id, title=title, description=desc,
+                      price_type=price_type, price=price, price_min=price_min,
+                      price_max=price_max, category=category,
+                      delivery_time=d_time, service_steps=s_steps)
         db.session.add(svc); db.session.commit()
         flash('服务发布成功！🚀', 'success')
         return redirect(url_for('provider_dashboard'))
@@ -716,6 +647,7 @@ def edit_service(sid):
     return render_template('service_form.html', service=svc, categories=CATEGORIES)
 
 # ══ 管理面板 ══
+
 @app.route('/admin')
 @login_required
 def admin_panel():
@@ -749,23 +681,29 @@ def handle_report(rid):
     return jsonify({'ok':True})
 
 # ══ 静态内容页面 ══
+
 @app.route('/about')
 def about():
     return render_template('about.html')
+
 @app.route('/team')
 def team():
     return render_template('team.html')
+
 @app.route('/terms')
 def terms():
     return render_template('terms.html')
+
 @app.route('/privacy')
 def privacy():
     return render_template('privacy.html')
+
 @app.route('/help')
 def help_center():
     return render_template('help.html')
 
 # ══ 搜索 API ══
+
 @app.route('/api/search')
 def api_search():
     q = request.args.get('q','').strip()
@@ -778,55 +716,10 @@ def api_search():
                      'price_type':s.price_type,'category':s.category} for s in results])
 
 # ══════════════════════════════════════════
-# 数据库初始化与迁移
+# 示例数据
 # ══════════════════════════════════════════
-def auto_migrate():
-    """安全的字段迁移，先判断表是否存在，再执行操作"""
-    db_url = app.config['SQLALCHEMY_DATABASE_URI']
-    try:
-        if 'postgresql' in db_url or 'postgres' in db_url:
-            migrations = [
-                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS deliver_note TEXT DEFAULT ''",
-                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS deliver_link VARCHAR(500) DEFAULT ''",
-                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP",
-                "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_id INTEGER",
-            ]
-            with db.engine.connect() as conn:
-                for sql in migrations:
-                    try:
-                        conn.execute(db.text(sql))
-                        conn.commit()
-                    except Exception:
-                        conn.rollback()
-        else:
-            import sqlite3
-            db_path = db_url.replace('sqlite:///', '')
-            if not db_path or db_path == ':memory:':
-                return
-            con = sqlite3.connect(db_path)
-            cur = con.cursor()
-            def table_exists(table):
-                cur.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
-                return cur.fetchone() is not None
-            def col_exists(table, col):
-                cur.execute(f"PRAGMA table_info({table})")
-                return any(r[1] == col for r in cur.fetchall())
-            migrations = [
-                ('orders',  'deliver_note', "ALTER TABLE orders ADD COLUMN deliver_note TEXT DEFAULT ''"),
-                ('orders',  'deliver_link', "ALTER TABLE orders ADD COLUMN deliver_link VARCHAR(500) DEFAULT ''"),
-                ('orders',  'delivered_at', 'ALTER TABLE orders ADD COLUMN delivered_at DATETIME'),
-                ('reviews', 'service_id',   'ALTER TABLE reviews ADD COLUMN service_id INTEGER'),
-            ]
-            for table, col, sql in migrations:
-                if table_exists(table) and not col_exists(table, col):
-                    cur.execute(sql)
-                    print(f'迁移: 添加字段 {table}.{col}')
-            con.commit(); cur.close(); con.close()
-    except Exception as e:
-        print(f'迁移时出错（可忽略）: {e}')
 
 def seed():
-    """示例数据初始化，仅在无数据时执行"""
     if User.query.count() > 0:
         return
     admin = User(username='admin', email='admin@skillmarket.com',
@@ -899,72 +792,80 @@ def seed():
     db.session.commit()
     print('✅ 示例数据初始化完成')
 
-# 数据库初始化，仅执行一次
-def init_database():
-    global DB_INITIALIZED
-    if DB_INITIALIZED:
-        return
+def auto_migrate():
+    """
+    自动迁移：检测并添加新字段，兼容 SQLite 和 PostgreSQL。
+    每次启动时运行，已存在的字段会自动跳过，不影响现有数据。
+    """
+    db_url = app.config['SQLALCHEMY_DATABASE_URI']
+    try:
+        if 'postgresql' in db_url or 'postgres' in db_url:
+            migrations = [
+                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS deliver_note TEXT DEFAULT ''",
+                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS deliver_link VARCHAR(500) DEFAULT ''",
+                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP",
+                "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_id INTEGER",
+            ]
+            with db.engine.connect() as conn:
+                for sql in migrations:
+                    try:
+                        conn.execute(db.text(sql))
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+        else:
+            import sqlite3
+            db_path = db_url.replace('sqlite:///', '')
+            if not db_path or db_path == ':memory:':
+                return
+            con = sqlite3.connect(db_path)
+            cur = con.cursor()
+            def col_exists(table, col):
+                cur.execute(f"PRAGMA table_info({table})")
+                return any(r[1] == col for r in cur.fetchall())
+            migrations = [
+                ('orders',  'deliver_note', "ALTER TABLE orders ADD COLUMN deliver_note TEXT DEFAULT ''"),
+                ('orders',  'deliver_link', "ALTER TABLE orders ADD COLUMN deliver_link VARCHAR(500) DEFAULT ''"),
+                ('orders',  'delivered_at', 'ALTER TABLE orders ADD COLUMN delivered_at DATETIME'),
+                ('reviews', 'service_id',   'ALTER TABLE reviews ADD COLUMN service_id INTEGER'),
+            ]
+            for table, col, sql in migrations:
+                if not col_exists(table, col):
+                    cur.execute(sql)
+                    print(f'迁移: 添加字段 {table}.{col}')
+            con.commit(); cur.close(); con.close()
+    except Exception as e:
+        print(f'迁移时出错（可忽略）: {e}')
+
+with app.app_context():
+    db.create_all()
+    auto_migrate()
+    seed()
+
+if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         auto_migrate()
         seed()
-        DB_INITIALIZED = True
-
-# 应用启动时执行初始化
-init_database()
-
-# ══════════════════════════════════════════
-# Socket.IO 事件处理（修复认证和信令问题）
-# ══════════════════════════════════════════
+    print('\n' + '═'*50)
+    print('  🚀  SkillMarket 已启动！')
+    print('  🌐  Railway 部署中...')
+    print('═'*50 + '\n')
+    # 生产环境用 Railway 的 Gunicorn 启动，这里可以直接 pass
+    pass
+# ===================== 音视频通话 实时通知 =====================
+# 用户连接绑定
 @socketio.on('connect')
-@authenticated_only
 def handle_connect():
-    """用户连接时强制加入专属房间，确保信令可达"""
-    user_room = f"user_{current_user.id}"
-    join_room(user_room)
-    print(f"✅ 用户 {current_user.username} 已加入房间 {user_room}")
-    emit('connectSuccess', {'user_id': current_user.id, 'username': current_user.username})
+    if current_user.is_authenticated:
+        socketio.server.enter_room(request.sid, f"user_{current_user.id}")
 
-@socketio.on('join')
-@authenticated_only
-def handle_join(data):
-    """兼容手动加入房间"""
-    user_room = f"user_{current_user.id}"
-    join_room(user_room)
-
+# 发起通话
 @socketio.on('call')
-@authenticated_only
 def handle_call(data):
-    """转发来电信令，携带完整主叫方信息"""
-    target_id = data.get('to')
-    emit('incomingCall', {
-        'type': data.get('type', 'audio'),
-        'sdp': data.get('sdp'),
-        'from_id': current_user.id,
-        'from_name': current_user.username
-    }, to=f"user_{target_id}")
+    emit('incomingCall', {'type': data['type']}, room=f"user_{data['to']}")
 
+# 拒绝通话
 @socketio.on('reject')
-@authenticated_only
 def handle_reject(data):
-    """转发拒绝通话信令"""
-    emit('callRejected', {}, to=f"user_{data['to']}")
-
-@socketio.on('hangup')
-@authenticated_only
-def handle_hangup(data):
-    """转发挂断信令"""
-    emit('callHangup', {}, to=f"user_{data['to']}")
-
-@socketio.on('rtcSignal')
-@authenticated_only
-def handle_rtc_signal(data):
-    """WebRTC 信令转发"""
-    emit('rtcSignal', {'signal': data['signal']}, to=f"user_{data['to']}")
-
-# ══════════════════════════════════════════
-# 应用启动入口
-# ══════════════════════════════════════════
-if __name__ == '__main__':
-    PORT = int(os.environ.get('PORT', 8080))
-    socketio.run(app, host='0.0.0.0', port=PORT, debug=False)
+    emit('callRejected', {}, room=f"user_{data['to']}")
