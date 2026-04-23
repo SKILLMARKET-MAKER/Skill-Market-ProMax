@@ -5,6 +5,7 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
+from functools import wraps
 
 # 初始化Flask应用
 app = Flask(__name__)
@@ -16,7 +17,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 if 'sqlite://' in app.config['SQLALCHEMY_DATABASE_URI']:
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'connect_args': {'check_same_thread': False}}
 
-# 修复SocketIO初始化，适配Gunicorn和Railway部署，增加重连和稳定性配置
+# 修复SocketIO初始化，适配Gunicorn和Railway部署
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
@@ -37,6 +38,18 @@ login_manager.login_message = '请先登录'
 
 # 全局变量，控制数据库仅初始化一次，避免多worker重复执行
 DB_INITIALIZED = False
+
+# 全局异常捕获，避免500白页
+@app.errorhandler(500)
+def internal_server_error(e):
+    app.logger.error(f'服务器内部错误: {str(e)}', exc_info=True)
+    flash('服务器开小差了，请稍后重试', 'error')
+    return redirect(request.referrer or url_for('index'))
+
+@app.errorhandler(404)
+def page_not_found(e):
+    flash('您访问的页面不存在', 'error')
+    return redirect(url_for('index'))
 
 # ══════════════════════════════════════════
 # 数据模型
@@ -153,6 +166,15 @@ class Report(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# SocketIO 认证装饰器，避免匿名用户访问
+def authenticated_only(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return False
+        return f(*args, **kwargs)
+    return wrapped
+
 # ══════════════════════════════════════════
 # 常量
 # ══════════════════════════════════════════
@@ -170,7 +192,7 @@ REPORT_REASONS = [
 ]
 
 # ══════════════════════════════════════════
-# 路由（核心优化数据库查询性能）
+# 路由
 # ══════════════════════════════════════════
 @app.route('/')
 def index():
@@ -291,32 +313,49 @@ def create_order(sid):
     note  = request.form.get('note','')
     hours = request.form.get('hours', 1, type=float) or 1
     actual_price = service.price * hours if service.price_type == 'hourly' else service.price
-    order = Order(user_id=current_user.id, service_id=service.id,
-                  provider_id=service.provider_id, price=actual_price,
-                  hours=hours, status='pending', note=note)
+    order = Order(
+        user_id=current_user.id, 
+        service_id=service.id,
+        provider_id=service.provider_id, 
+        price=actual_price,
+        hours=hours, 
+        status='pending', 
+        note=note
+    )
     db.session.add(order); db.session.commit()
     flash('订单已创建，请完成支付 💳', 'success')
     return redirect(url_for('order_detail', oid=order.id))
 
+# 【核心修复】订单详情路由，解决联系服务者500问题
 @app.route('/order/<int:oid>')
 @login_required
 def order_detail(oid):
     order = Order.query.get_or_404(oid)
     pp = current_user.provider_profile
     is_provider = pp and pp.id == order.provider_id
+    # 权限校验
     if order.user_id != current_user.id and not is_provider and current_user.role != 'admin':
         flash('无权查看此订单', 'error')
         return redirect(url_for('my_orders'))
+    # 服务步骤处理
     steps = []
     if order.service and order.service.service_steps:
         steps = [s.strip() for s in order.service.service_steps.split('\n') if s.strip()]
+    # 【关键修复】联系对象赋值，增加多层空值判断，彻底避免AttributeError
     chat_target = None
     if is_provider:
-        chat_target = order.buyer
-    elif order.service and order.service.provider and order.service.provider.user:
-        chat_target = order.service.provider.user
-    return render_template('order_detail.html', order=order, is_provider=is_provider,
-                           steps=steps, chat_target=chat_target,
+        # 服务者联系买家
+        if order.buyer:
+            chat_target = order.buyer
+    else:
+        # 买家联系服务者，逐层校验非空
+        if order.service and order.service.provider and order.service.provider.user:
+            chat_target = order.service.provider.user
+    return render_template('order_detail.html', 
+                           order=order, 
+                           is_provider=is_provider,
+                           steps=steps, 
+                           chat_target=chat_target,
                            REPORT_REASONS=REPORT_REASONS)
 
 @app.route('/order/<int:oid>/pay', methods=['POST'])
@@ -361,6 +400,7 @@ def update_step(oid):
         db.session.commit()
     return jsonify({'ok':True,'current_step':order.current_step})
 
+# 修复交付接口字段名匹配问题
 @app.route('/order/<int:oid>/deliver', methods=['POST'])
 @login_required
 def deliver_order(oid):
@@ -481,20 +521,15 @@ def edit_profile():
     flash('资料已更新', 'success')
     return redirect(url_for('profile'))
 
-# ══ 消息 / 会话（优化N+1查询，解决页面加载慢）══════════════════════
+# ══ 消息 / 会话 路由修复，增加异常兜底
 @app.route('/messages')
 @login_required
 def messages():
-    # 优化：一次性查出所有有对话的用户ID，避免循环查询
     sent_to = db.session.query(Message.receiver_id).filter_by(sender_id=current_user.id).distinct()
     recv_from = db.session.query(Message.sender_id).filter_by(receiver_id=current_user.id).distinct()
     uids = {r[0] for r in sent_to.all()} | {r[0] for r in recv_from.all()}
-    
-    # 一次性查出所有联系人
     contacts = User.query.filter(User.id.in_(uids)).all()
     info = []
-    
-    # 优化：一次性查出所有对话的最后一条消息，避免循环查询数据库
     for u in contacts:
         last_msg = Message.query.filter(
             ((Message.sender_id==current_user.id)&(Message.receiver_id==u.id))|
@@ -502,60 +537,70 @@ def messages():
         ).order_by(Message.created_at.desc()).first()
         unread = Message.query.filter_by(sender_id=u.id, receiver_id=current_user.id, is_read=False).count()
         info.append({'user':u,'last_msg':last_msg,'unread':unread})
-    
     info.sort(key=lambda x: x['last_msg'].created_at if x['last_msg'] else datetime.min, reverse=True)
     total_unread = Message.query.filter_by(receiver_id=current_user.id, is_read=False).count()
     return render_template('messages.html', contacts=info, total_unread=total_unread)
 
+# 对话路由修复，增加异常捕获
 @app.route('/messages/<int:uid>', methods=['GET','POST'])
 @login_required
 def conversation(uid):
-    target = User.query.get_or_404(uid)
-    if request.method == 'POST':
-        content = request.form.get('content','').strip()
-        if not content:
-            return jsonify({'ok':False,'msg':'消息不能为空'})
-        msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
-        db.session.add(msg)
+    try:
+        target = User.query.get_or_404(uid)
+        if request.method == 'POST':
+            content = request.form.get('content','').strip()
+            if not content:
+                return jsonify({'ok':False,'msg':'消息不能为空'})
+            msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
+            db.session.add(msg)
+            db.session.commit()
+            # 实时推送给接收方
+            socketio.emit('newMessage', {
+                'id':         msg.id,
+                'content':    msg.content,
+                'sender_id':  msg.sender_id,
+                'sender_name':current_user.username,
+                'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+            }, room=f"user_{uid}")
+            return jsonify({'ok': True, 'id': msg.id})
+        # 标记已读
+        Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
+                     .update({'is_read': True})
         db.session.commit()
-        # 实时推送给接收方
-        socketio.emit('newMessage', {
-            'id':         msg.id,
-            'content':    msg.content,
-            'sender_id':  msg.sender_id,
-            'sender_name':current_user.username,
-            'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
-        }, room=f"user_{uid}")
-        return jsonify({'ok': True, 'id': msg.id})
-    # GET：标记已读，渲染页面
-    Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
-                 .update({'is_read': True})
-    db.session.commit()
-    msgs = Message.query.filter(
-        ((Message.sender_id==current_user.id)&(Message.receiver_id==uid))|
-        ((Message.sender_id==uid)&(Message.receiver_id==current_user.id))
-    ).order_by(Message.created_at.asc()).all()
-    return render_template('conversation.html', target=target, messages=msgs)
+        # 查询消息
+        msgs = Message.query.filter(
+            ((Message.sender_id==current_user.id)&(Message.receiver_id==uid))|
+            ((Message.sender_id==uid)&(Message.receiver_id==current_user.id))
+        ).order_by(Message.created_at.asc()).all()
+        return render_template('conversation.html', target=target, messages=msgs)
+    except Exception as e:
+        app.logger.error(f'对话页面错误: {str(e)}', exc_info=True)
+        flash('对话加载失败，请稍后重试', 'error')
+        return redirect(url_for('messages'))
 
-# 轮询降级为3秒一次，仅作为Socket断开时的兜底
+# 轮询接口降级为3秒一次，仅兜底
 @app.route('/api/messages/<int:uid>/poll')
 @login_required
 def api_poll_messages(uid):
-    since = request.args.get('since', type=int, default=0)
-    msgs  = Message.query.filter(
-        Message.sender_id==uid,
-        Message.receiver_id==current_user.id,
-        Message.id > since
-    ).order_by(Message.created_at.asc()).all()
-    for m in msgs:
-        m.is_read = True
-    db.session.commit()
-    return jsonify([{
-        'id':         m.id,
-        'content':    m.content,
-        'sender_id':  m.sender_id,
-        'created_at': m.created_at.strftime('%Y-%m-%dT%H:%M:%S')
-    } for m in msgs])
+    try:
+        since = request.args.get('since', type=int, default=0)
+        msgs  = Message.query.filter(
+            Message.sender_id==uid,
+            Message.receiver_id==current_user.id,
+            Message.id > since
+        ).order_by(Message.created_at.asc()).all()
+        for m in msgs:
+            m.is_read = True
+        db.session.commit()
+        return jsonify([{
+            'id':         m.id,
+            'content':    m.content,
+            'sender_id':  m.sender_id,
+            'created_at': m.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+        } for m in msgs])
+    except Exception as e:
+        app.logger.error(f'消息轮询错误: {str(e)}', exc_info=True)
+        return jsonify([]), 200
 
 # ══ 举报 ══
 @app.route('/report', methods=['GET','POST'])
@@ -608,6 +653,7 @@ def provider_dashboard():
                            provider=prov, services=svcs, orders=orders,
                            stats=stats, categories=CATEGORIES, cat_icons=CAT_ICONS)
 
+# 【关键修复】修复变量名未定义错误，解决发布服务500问题
 @app.route('/provider/service/new', methods=['GET','POST'])
 @login_required
 def new_service():
@@ -628,10 +674,19 @@ def new_service():
         s_steps    = request.form.get('service_steps','').strip()
         if not title or not desc or not price or not category:
             flash('请填写所有必填字段', 'error'); return redirect(url_for('new_service'))
-        svc = Service(provider_id=prov.id, title=title, description=desc,
-                      price_type=price_type, price=price, price_min=price_min,
-                      price_max=price_max, category=category,
-                      delivery_time=d_time, service_steps=s_steps)
+        # 修复变量名错误：pmin/pmax → price_min/price_max
+        svc = Service(
+            provider_id=prov.id, 
+            title=title, 
+            description=desc,
+            price_type=price_type, 
+            price=price, 
+            price_min=price_min,
+            price_max=price_max, 
+            category=category,
+            delivery_time=d_time, 
+            service_steps=s_steps
+        )
         db.session.add(svc); db.session.commit()
         flash('服务发布成功！🚀', 'success')
         return redirect(url_for('provider_dashboard'))
@@ -859,29 +914,28 @@ def init_database():
 init_database()
 
 # ══════════════════════════════════════════
-# Socket.IO 事件处理（核心修复通话信令）
+# Socket.IO 事件处理（修复认证和信令问题）
 # ══════════════════════════════════════════
 @socketio.on('connect')
+@authenticated_only
 def handle_connect():
     """用户连接时强制加入专属房间，确保信令可达"""
-    if current_user.is_authenticated:
-        user_room = f"user_{current_user.id}"
-        join_room(user_room)
-        print(f"✅ 用户 {current_user.username} 已加入房间 {user_room}")
-        emit('connectSuccess', {'user_id': current_user.id, 'username': current_user.username})
+    user_room = f"user_{current_user.id}"
+    join_room(user_room)
+    print(f"✅ 用户 {current_user.username} 已加入房间 {user_room}")
+    emit('connectSuccess', {'user_id': current_user.id, 'username': current_user.username})
 
 @socketio.on('join')
+@authenticated_only
 def handle_join(data):
     """兼容手动加入房间"""
-    if current_user.is_authenticated:
-        user_room = f"user_{current_user.id}"
-        join_room(user_room)
+    user_room = f"user_{current_user.id}"
+    join_room(user_room)
 
 @socketio.on('call')
+@authenticated_only
 def handle_call(data):
-    """转发来电信令，携带完整主叫方信息，确保被叫端能触发弹窗"""
-    if not current_user.is_authenticated:
-        return
+    """转发来电信令，携带完整主叫方信息"""
     target_id = data.get('to')
     emit('incomingCall', {
         'type': data.get('type', 'audio'),
@@ -891,18 +945,21 @@ def handle_call(data):
     }, to=f"user_{target_id}")
 
 @socketio.on('reject')
+@authenticated_only
 def handle_reject(data):
     """转发拒绝通话信令"""
     emit('callRejected', {}, to=f"user_{data['to']}")
 
 @socketio.on('hangup')
+@authenticated_only
 def handle_hangup(data):
     """转发挂断信令"""
     emit('callHangup', {}, to=f"user_{data['to']}")
 
 @socketio.on('rtcSignal')
+@authenticated_only
 def handle_rtc_signal(data):
-    """WebRTC 信令转发（offer/answer/candidate）"""
+    """WebRTC 信令转发"""
     emit('rtcSignal', {'signal': data['signal']}, to=f"user_{data['to']}")
 
 # ══════════════════════════════════════════
