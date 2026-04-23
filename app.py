@@ -872,3 +872,7 @@ def handle_reject(data):
 @socketio.on('hangup')
 def handle_hangup(data):
     emit('callHangup', {}, to=f"user_{data['to']}")
+@socketio.on('rtcSignal')
+def handle_rtc_signal(data):
+    """WebRTC 信令转发（offer/answer/candidate）"""
+    emit('rtcSignal', {'signal': data['signal']}, to=f"user_{data['to']}")
