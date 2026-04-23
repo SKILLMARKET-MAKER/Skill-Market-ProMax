@@ -1,14 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import join_room
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
 
 app = Flask(__name__)
-# 初始化实时通信（通话来电通知用）
 socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'skillmarket-threementogether-2026')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///skillmarket.db')
@@ -78,11 +76,9 @@ class Order(db.Model):
     price = db.Column(db.Float)
     hours = db.Column(db.Float, default=1)
     note = db.Column(db.Text, default='')
-    # ── 新增：交付物字段 ──────────────────────────────────
-    deliver_note = db.Column(db.Text, default='')   # 卖家填写的交付说明
-    deliver_link = db.Column(db.String(500), default='')  # 交付链接（可选）
-    delivered_at = db.Column(db.DateTime, nullable=True)  # 交付时间
-    # ─────────────────────────────────────────────────────
+    deliver_note = db.Column(db.Text, default='')
+    deliver_link = db.Column(db.String(500), default='')
+    delivered_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     payment = db.relationship('Payment', backref='order', uselist=False)
@@ -102,7 +98,7 @@ class Review(db.Model):
     __tablename__ = 'reviews'
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), unique=True)
-    service_id = db.Column(db.Integer, db.ForeignKey('services.id'), nullable=True)  # ── 新增：关联服务
+    service_id = db.Column(db.Integer, db.ForeignKey('services.id'), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     provider_id = db.Column(db.Integer, db.ForeignKey('providers.id'))
     rating = db.Column(db.Integer, nullable=False)
@@ -251,14 +247,11 @@ def services():
         categories=CATEGORIES, cat_icons=CAT_ICONS,
         current_category=category, sort=sort, search=search)
 
-# ── 修复：评价查询改为按 service_id，与 review_count 保持一致 ──────────────
 @app.route('/service/<int:sid>')
 def service_detail(sid):
     service = Service.query.get_or_404(sid)
-    # 按服务 id 查评价，这样数量与 service.review_count 始终匹配
     reviews = Review.query.filter_by(service_id=sid)\
                           .order_by(Review.created_at.desc()).limit(10).all()
-    # 旧数据兼容：若 service_id 字段为空（旧评价），回退到 provider 查询
     if not reviews:
         reviews = Review.query.filter_by(provider_id=service.provider_id)\
                               .order_by(Review.created_at.desc()).limit(10).all()
@@ -351,7 +344,6 @@ def update_step(oid):
         db.session.commit()
     return jsonify({'ok':True,'current_step':order.current_step})
 
-# ── 修复：deliver 接口保存 note 和 link ──────────────────────────────────
 @app.route('/order/<int:oid>/deliver', methods=['POST'])
 @login_required
 def deliver_order(oid):
@@ -398,7 +390,6 @@ def cancel_order(oid):
     db.session.commit()
     return jsonify({'ok':True,'msg':'订单已取消'})
 
-# ── 修复：评价时同时写入 service_id，保证 service_detail 查询匹配 ────────
 @app.route('/order/<int:oid>/review', methods=['POST'])
 @login_required
 def add_review(oid):
@@ -414,7 +405,7 @@ def add_review(oid):
     tags    = ','.join(request.form.getlist('tags'))
     rev = Review(
         order_id=order.id,
-        service_id=order.service_id,   # ← 新增：写入服务 id
+        service_id=order.service_id,
         user_id=current_user.id,
         provider_id=order.provider_id,
         rating=rating,
@@ -422,14 +413,12 @@ def add_review(oid):
         tags=tags
     )
     db.session.add(rev)
-    # 重新统计该服务的评分（只算该服务的评价）
     svc = Service.query.get(order.service_id)
     if svc:
         all_revs = Review.query.filter_by(service_id=order.service_id).all() + [rev]
         avg = round(sum(r.rating for r in all_revs) / len(all_revs), 1)
         svc.rating       = avg
-        svc.review_count = len(all_revs)   # ← 与 service_detail 查询数量一致
-    # 同步更新 provider 总评分
+        svc.review_count = len(all_revs)
     prov = Provider.query.get(order.provider_id)
     if prov:
         prov_revs = Review.query.filter_by(provider_id=order.provider_id).all() + [rev]
@@ -496,35 +485,7 @@ def messages():
     total_unread = Message.query.filter_by(receiver_id=current_user.id, is_read=False).count()
     return render_template('messages.html', contacts=info, total_unread=total_unread)
 
-@app.route('/messages/<int:uid>', methods=['GET','POST'])
-@login_required
-def conversation(uid):
-    target = User.query.get_or_404(uid)
-    if request.method == 'POST':
-        content = request.form.get('content','').strip()
-        if not content:
-            return jsonify({'ok':False,'msg':'消息不能为空'})
-        msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
-        db.session.add(msg)
-        db.session.commit()
-        # ── 新增：通过 Socket.IO 实时推送给对方 ──
-        socketio.emit('newMessage', {
-            'id':        msg.id,
-            'content':   msg.content,
-            'sender_id': msg.sender_id,
-            'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
-        }, room=f"user_{uid}")
-        return jsonify({'ok':True, 'id': msg.id})
-    # GET 部分不变...
-    Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
-                 .update({'is_read':True})
-    db.session.commit()
-    msgs = Message.query.filter(
-        ((Message.sender_id==current_user.id)&(Message.receiver_id==uid))|
-        ((Message.sender_id==uid)&(Message.receiver_id==current_user.id))
-    ).order_by(Message.created_at.asc()).all()
-    return render_template('conversation.html', target=target, messages=msgs)
-
+# ★ 唯一的 conversation 路由（已合并推送逻辑，删除重复定义）
 @app.route('/messages/<int:uid>', methods=['GET','POST'])
 @login_required
 def conversation(uid):
@@ -542,8 +503,9 @@ def conversation(uid):
             'content':    msg.content,
             'sender_id':  msg.sender_id,
             'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
-        }, to=f"user_{uid}")
+        }, room=f"user_{uid}")
         return jsonify({'ok': True, 'id': msg.id})
+    # GET：标记已读，渲染页面
     Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
                  .update({'is_read': True})
     db.session.commit()
@@ -552,6 +514,25 @@ def conversation(uid):
         ((Message.sender_id==uid)&(Message.receiver_id==current_user.id))
     ).order_by(Message.created_at.asc()).all()
     return render_template('conversation.html', target=target, messages=msgs)
+
+@app.route('/api/messages/<int:uid>/poll')
+@login_required
+def api_poll_messages(uid):
+    since = request.args.get('since', type=int, default=0)
+    msgs  = Message.query.filter(
+        Message.sender_id==uid,
+        Message.receiver_id==current_user.id,
+        Message.id > since
+    ).order_by(Message.created_at.asc()).all()
+    for m in msgs:
+        m.is_read = True
+    db.session.commit()
+    return jsonify([{
+        'id':         m.id,
+        'content':    m.content,
+        'sender_id':  m.sender_id,
+        'created_at': m.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+    } for m in msgs])
 
 # ══ 举报 ══
 
@@ -805,10 +786,6 @@ def seed():
     print('✅ 示例数据初始化完成')
 
 def auto_migrate():
-    """
-    自动迁移：检测并添加新字段，兼容 SQLite 和 PostgreSQL。
-    每次启动时运行，已存在的字段会自动跳过，不影响现有数据。
-    """
     db_url = app.config['SQLALCHEMY_DATABASE_URI']
     try:
         if 'postgresql' in db_url or 'postgres' in db_url:
@@ -863,8 +840,12 @@ if __name__ == '__main__':
     print('  🚀  SkillMarket 已启动！')
     print('  🌐  Railway 部署中...')
     print('═'*50 + '\n')
-    # 生产环境用 Railway 的 Gunicorn 启动，这里可以直接 pass
     pass
+
+# ══════════════════════════════════════════
+# Socket.IO 事件处理
+# ══════════════════════════════════════════
+
 @socketio.on('connect')
 def handle_connect():
     if current_user.is_authenticated:
@@ -875,8 +856,7 @@ def handle_connect():
 @socketio.on('join')
 def handle_join(data):
     if current_user.is_authenticated:
-        room = f"user_{current_user.id}"
-        join_room(room)
+        join_room(f"user_{current_user.id}")
 
 @socketio.on('call')
 def handle_call(data):
