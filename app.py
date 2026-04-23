@@ -854,18 +854,20 @@ if __name__ == '__main__':
     # 生产环境用 Railway 的 Gunicorn 启动，这里可以直接 pass
     pass
 # ===================== 音视频通话 实时通知 =====================
-# 用户连接绑定
 @socketio.on('connect')
 def handle_connect():
     if current_user.is_authenticated:
         socketio.server.enter_room(request.sid, f"user_{current_user.id}")
 
-# 发起通话
 @socketio.on('call')
 def handle_call(data):
-    emit('incomingCall', {'type': data['type']}, room=f"user_{data['to']}")
+    # 注意：这里补上 room 字段的转发
+    emit('incomingCall', {'type': data['type'], 'room': data.get('room','')}, room=f"user_{data['to']}")
 
-# 拒绝通话
 @socketio.on('reject')
 def handle_reject(data):
     emit('callRejected', {}, room=f"user_{data['to']}")
+
+@socketio.on('hangup')
+def handle_hangup(data):
+    emit('callHangup', {}, room=f"user_{data['to']}")
