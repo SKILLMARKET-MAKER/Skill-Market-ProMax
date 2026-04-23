@@ -114,29 +114,31 @@
   </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
-const ME   = {{ current_user.id }};
-const TGT  = {{ target.id }};
+const ME     = {{ current_user.id }};
+const TGT    = {{ target.id }};
 const INIT_ME   = {{ current_user.username | tojson }}[0].toUpperCase();
 const INIT_THEM = {{ target.username | tojson }}[0].toUpperCase();
 let lastId = {{ messages[-1].id if messages else 0 }};
 const list = document.getElementById('msgList');
 const txt  = document.getElementById('msgTxt');
 
+// ── 时间格式化 ──
 function fmtTime(utcStr) {
   const d = new Date(utcStr.includes('Z') ? utcStr : utcStr + 'Z');
   const now = new Date();
-  const hm  = d.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', hour12:false });
-  const sameDay = (a, b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+  const hm = d.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', hour12:false });
+  const sameDay = (a,b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
   const yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
   if (sameDay(d, now)) return hm;
   if (sameDay(d, yesterday)) return '昨天 ' + hm;
-  if (d.getFullYear() === now.getFullYear()) return (d.getMonth()+1) + '月' + d.getDate() + '日 ' + hm;
-  return d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + hm;
+  if (d.getFullYear() === now.getFullYear()) return (d.getMonth()+1)+'月'+d.getDate()+'日 '+hm;
+  return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()+' '+hm;
 }
 document.querySelectorAll('.msg-time[data-utc]').forEach(el => { el.textContent = fmtTime(el.dataset.utc); });
+
+// ── 日期分隔线 ──
 (function insertDateSeps() {
   const rows = [...list.querySelectorAll('.msg-row[data-id]')];
   let lastDateKey = null;
@@ -144,77 +146,143 @@ document.querySelectorAll('.msg-time[data-utc]').forEach(el => { el.textContent 
     const timeEl = row.querySelector('.msg-time[data-utc]');
     if (!timeEl) return;
     const d = new Date(timeEl.dataset.utc + 'Z');
-    const dateKey = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+    const dateKey = d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
     if (dateKey !== lastDateKey) {
       lastDateKey = dateKey;
       const sep = document.createElement('div'); sep.className = 'date-sep';
       const now = new Date(); const yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
-      if (d.toDateString() === now.toDateString()) sep.textContent = '今天';
-      else if (d.toDateString() === yesterday.toDateString()) sep.textContent = '昨天';
-      else sep.textContent = (d.getMonth()+1) + '月' + d.getDate() + '日';
+      if (d.toDateString()===now.toDateString()) sep.textContent='今天';
+      else if (d.toDateString()===yesterday.toDateString()) sep.textContent='昨天';
+      else sep.textContent=(d.getMonth()+1)+'月'+d.getDate()+'日';
       list.insertBefore(sep, row);
     }
   });
 })();
-function scrollBot() { list.scrollTop = list.scrollHeight; } scrollBot();
-function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n{2,}/g,'<br><br>').replace(/\n/g,' '); }
+
+function scrollBot() { list.scrollTop = list.scrollHeight; }
+scrollBot();
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/\n{2,}/g,'<br><br>').replace(/\n/g,' ');
+}
+
+// ── 渲染气泡（去重保护）──
+const renderedIds = new Set(
+  [...list.querySelectorAll('.msg-row[data-id]')].map(r => +r.dataset.id)
+);
+
 function addBubble(m, utcStr) {
+  // 防止重复渲染
+  if (m.id && renderedIds.has(m.id)) return;
+  if (m.id) renderedIds.add(m.id);
+
   const me = (m.sender_id === ME);
   const init = me ? INIT_ME : INIT_THEM;
-  const timeStr = fmtTime(utcStr ? utcStr : new Date().toISOString());
+  const timeStr = fmtTime(utcStr || new Date().toISOString());
   const row = document.createElement('div');
   row.className = 'msg-row' + (me ? ' me' : '');
   if (m.id) row.dataset.id = m.id;
-  row.innerHTML = `<div class="msg-av" style="background:linear-gradient(135deg,${me ? '#4a6cf3,#f15bb5' : '#06d6a0,#4a6cf3'})">${init}</div>` +
-    `<div style="display:flex;flex-direction:column;${me ? 'align-items:flex-end' : 'align-items:flex-start'}">` +
-    `<div class="msg-time" style="${me ? 'text-align:right' : ''}">${timeStr}</div>` +
-    `<div class="bubble-wrap"><div class="bubble ${me ? 'me' : 'them'}">${esc(m.content)}</div></div></div>`;
+  row.innerHTML =
+    `<div class="msg-av" style="background:linear-gradient(135deg,${me?'#4a6cf3,#f15bb5':'#06d6a0,#4a6cf3'})">${init}</div>` +
+    `<div style="display:flex;flex-direction:column;${me?'align-items:flex-end':'align-items:flex-start'}">` +
+    `<div class="msg-time" style="${me?'text-align:right':''}">${timeStr}</div>` +
+    `<div class="bubble-wrap"><div class="bubble ${me?'me':'them'}">${esc(m.content)}</div></div></div>`;
   document.getElementById('emptyHint')?.remove();
-  list.appendChild(row); scrollBot();
+  list.appendChild(row);
+  scrollBot();
 }
+
+// ── 发送消息 ──
 async function send() {
-  const content = txt.value.trim(); if (!content) return;
-  txt.value = ''; txt.style.height = 'auto';
+  const content = txt.value.trim();
+  if (!content) return;
+  txt.value = '';
+  txt.style.height = 'auto';
+
+  // 乐观显示（无 id，先占位）
   addBubble({ sender_id: ME, content }, new Date().toISOString());
-  const fd = new FormData(); fd.append('content', content);
+
+  const fd = new FormData();
+  fd.append('content', content);
   try {
-    const res = await fetch('/messages/' + TGT, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-    if (res.ok) { const d = await res.json(); if (d.id && d.id > lastId) lastId = d.id; }
+    const res = await fetch('/messages/' + TGT, {
+      method: 'POST', body: fd,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    if (res.ok) {
+      const d = await res.json();
+      if (d.id) {
+        // 把最后一条无id气泡补上id，防止轮询重复渲染
+        const rows = list.querySelectorAll('.msg-row:not([data-id])');
+        if (rows.length) {
+          const last = rows[rows.length - 1];
+          last.dataset.id = d.id;
+          renderedIds.add(d.id);
+        }
+        if (d.id > lastId) lastId = d.id;
+      }
+    }
   } catch(e) { console.error('发送失败', e); }
 }
+
 document.getElementById('sendBtn').addEventListener('click', send);
-txt.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
-txt.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
-// ── 实时收消息（Socket.IO，毫秒级）──
-socket.on('newMessage', m => {
-  if (m.sender_id !== ME) {
-    addBubble(m, m.created_at);
-    if (m.id > lastId) lastId = m.id;
-  }
+txt.addEventListener('keydown', e => {
+  if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+txt.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
 });
 
-// ── 保底轮询（网络断线恢复用，降低频率到5秒）──
+// ══════════════════════════════════════════
+// Socket.IO — 实时收消息（核心）
+// ══════════════════════════════════════════
+const socket = io({
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000
+});
+
+// 连接成功后主动加入自己的房间（双保险）
+socket.on('connect', () => {
+  console.log('Socket 已连接:', socket.id);
+  socket.emit('join', {});
+});
+
+socket.on('disconnect', () => {
+  console.log('Socket 断开，等待重连...');
+});
+
+// ★ 核心：收到对方新消息立即显示
+socket.on('newMessage', m => {
+  console.log('收到新消息:', m);
+  addBubble(m, m.created_at);
+  if (m.id > lastId) lastId = m.id;
+});
+
+// ── 保底轮询（仅处理 Socket 断线期间漏掉的消息）──
 async function poll() {
   try {
     const res = await fetch('/api/messages/' + TGT + '/poll?since=' + lastId);
     if (!res.ok) return;
     const msgs = await res.json();
     msgs.forEach(m => {
-      if (m.sender_id !== ME) addBubble(m, m.created_at);
+      addBubble(m, m.created_at);  // addBubble 内部有去重，不会重复
       if (m.id > lastId) lastId = m.id;
     });
   } catch(e) {}
 }
-setInterval(poll, 5000); // 从1秒改为5秒，仅作断线保底
+setInterval(poll, 5000);  // 5秒保底，正常靠 Socket.IO 实时推送
 
 // ══════════════════════════════════════════
 // 音视频通话
 // ══════════════════════════════════════════
 const ZEGO_APPID  = 1125789196;
-const ZEGO_SERVER = 'wss://webliveroom1125789196-api.coolzcloud.com/ws';
+const ZEGO_SERVER = 'wss://webliveroom1125789196-api.zego.im/ws';
 const ZEGO_TOKEN  = '';
 
-const socket = io({ transports: ['websocket', 'polling'], reconnection: true });
 const zg = new ZegoExpressEngine(ZEGO_APPID, ZEGO_SERVER);
 
 zg.on('roomStreamUpdate', async (roomID, updateType, streamList) => {
@@ -231,7 +299,7 @@ async function startCall(type) {
   const ids = [ME, TGT].sort((a,b)=>a-b);
   roomId = `room_${ids[0]}_${ids[1]}`;
   try {
-    localStream = await zg.createStream({ camera: { video: type === 1, audio: true } });
+    localStream = await zg.createStream({ camera: { video: type===1, audio: true } });
     document.getElementById('localVideo').srcObject = localStream;
     await zg.loginRoom(roomId, ZEGO_TOKEN, { userID: String(ME), userName: '{{ current_user.username }}' }, { userUpdate: true });
     zg.startPublishingStream('stream_' + ME, localStream);
@@ -247,7 +315,7 @@ async function startCall(type) {
 async function answerCall() {
   document.getElementById('callModal').style.display = 'none';
   try {
-    localStream = await zg.createStream({ camera: { video: callType === 1, audio: true } });
+    localStream = await zg.createStream({ camera: { video: callType===1, audio: true } });
     document.getElementById('localVideo').srcObject = localStream;
     await zg.loginRoom(roomId, ZEGO_TOKEN, { userID: String(ME), userName: '{{ current_user.username }}' }, { userUpdate: true });
     zg.startPublishingStream('stream_' + ME, localStream);
@@ -262,12 +330,10 @@ function rejectCall() {
   document.getElementById('callModal').style.display = 'none';
   socket.emit('reject', { to: TGT });
 }
-
 function hangupCall() {
   socket.emit('hangup', { to: TGT });
   cleanupCall();
 }
-
 function cleanupCall() {
   if (localStream) { zg.destroyStream(localStream); localStream = null; }
   zg.stopPublishingStream('stream_' + ME);
@@ -279,11 +345,11 @@ function cleanupCall() {
 
 let micMuted = false, camMuted = false;
 function toggleMic() { micMuted = !micMuted; zg.muteMicrophone(micMuted); }
-function toggleCamera() { camMuted = !camMuted; zg.mutePublishStreamVideo('stream_' + ME, camMuted); }
+function toggleCamera() { camMuted = !camMuted; zg.mutePublishStreamVideo('stream_'+ME, camMuted); }
 
 socket.on('incomingCall', data => {
   callType = data.type; roomId = data.room;
-  document.getElementById('callType').textContent = data.type === 1 ? '视频通话...' : '语音通话...';
+  document.getElementById('callType').textContent = data.type===1 ? '视频通话...' : '语音通话...';
   document.getElementById('callModal').style.display = 'flex';
 });
 socket.on('callRejected', () => { alert('对方拒绝了通话'); cleanupCall(); });
