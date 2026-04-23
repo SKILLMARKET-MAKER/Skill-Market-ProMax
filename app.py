@@ -869,6 +869,3 @@ def handle_call(data):
 @socketio.on('reject')
 def handle_reject(data):
     emit('callRejected', {}, room=f"user_{data['to']}")
-@socketio.on('hangup')
-def handle_hangup(data):
-    emit('callHangup', {}, room=f"user_{data['to']}")
