@@ -7,7 +7,7 @@
 {% endblock %}
 {% block head %}
 <style>
-/* 补充缺失的CSS变量 */
+/* 补充缺失的CSS变量，解决样式失效 */
 :root { --r-lg: 16px; }
 .chat-outer{display:flex;flex-direction:column;height:calc(100vh - 220px);min-height:440px}
 .chat-hd{padding:.9rem 1.25rem;border-bottom:1px solid rgba(74, 108, 243, 0.08);display:flex;align-items:center;gap:.9rem;flex-shrink:0;background:#ffffff}
@@ -16,16 +16,16 @@
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .msg-row.me{flex-direction:row-reverse}
 .msg-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.75rem;flex-shrink:0;color:#fff;margin-top:4px}
-/* 核心优化：气泡宽度与换行 */
+/* 气泡宽度与换行优化，彻底解决短消息换行问题 */
 .bubble{
-  max-width:min(85%, 600px); /* 一行容纳更多文字 */
-  min-width:120px; /* 避免短消息过早换行 */
+  max-width:min(85%, 600px);
+  min-width:120px;
   padding:.65rem 1rem;
   border-radius:16px;
   font-size:.88rem;
   line-height:1.55;
   white-space: normal;
-  word-break: break-word; /* 优化换行逻辑 */
+  word-break: break-word;
   display: inline-block;
   vertical-align: bottom;
 }
@@ -43,7 +43,7 @@
 {% block content %}
 <div class="wrap" style="max-width:720px;margin:0 auto;padding-top:1.25rem">
   <div style="background:#ffffff;border:1px solid rgba(74, 108, 243, 0.08);border-radius:var(--r-lg);overflow:hidden;box-shadow:0 2px 8px rgba(74, 108, 243, 0.06)" class="chat-outer">
-    <!-- 聊天头部：用户信息与返回按钮 -->
+    <!-- 聊天头部 -->
     <div class="chat-hd">
       <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#4a6cf3,#f15bb5);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;box-shadow:0 2px 10px rgba(74, 108, 243, 0.3);color:#fff">{{ target.username[0].upper() }}</div>
       <div>
@@ -52,7 +52,7 @@
       </div>
       <a href="/messages" class="btn btn-s" style="margin-left:auto;padding:.35rem .75rem;font-size:.78rem">← 返回列表</a>
     </div>
-    <!-- 消息列表：历史消息渲染 -->
+    <!-- 消息列表 -->
     <div class="chat-msgs" id="msgList">
       {% if not messages %}
         <div id="emptyHint" style="text-align:center;color:#94a3b8;padding:2rem;font-size:.85rem">发送第一条消息开始对话 👋</div>
@@ -83,83 +83,164 @@
 {% endblock %}
 {% block scripts %}
 <script>
-// 核心变量初始化（必须完整）
-const ME   = {{ current_user.id }};
-const TGT  = {{ target.id }};
-const INIT_ME   = {{ current_user.username | tojson }}[0].toUpperCase();
-const INIT_THEM = {{ target.username | tojson }}[0].toUpperCase();
-let lastId = {{ messages[-1].id if messages else 0 }};
-const list = document.getElementById('msgList');
-const txt  = document.getElementById('msgTxt');
+// 等待页面DOM完全加载后再执行所有逻辑，彻底解决元素获取不到的问题
+document.addEventListener('DOMContentLoaded', function() {
+  // ==================== 核心变量初始化（100%兼容原有逻辑）====================
+  const ME   = {{ current_user.id | tojson }};
+  const TGT  = {{ target.id | tojson }};
+  const INIT_ME   = {{ current_user.username | tojson }}[0].toUpperCase();
+  const INIT_THEM = {{ target.username | tojson }}[0].toUpperCase();
+  let lastId = {{ messages[-1].id if messages else 0 }};
+  const list = document.getElementById('msgList');
+  const txt  = document.getElementById('msgTxt');
+  const sendBtn = document.getElementById('sendBtn');
 
-// 原有聊天逻辑（完全保留，配合优化后的HTML/CSS）
-function fmtTime(utcStr) {
-  const d = new Date(utcStr.includes('Z') ? utcStr : utcStr + 'Z');
-  const now = new Date();
-  const hm  = d.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', hour12:false });
-  const sameDay = (a, b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
-  const yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
-  if (sameDay(d, now)) return hm;
-  if (sameDay(d, yesterday)) return '昨天 ' + hm;
-  if (d.getFullYear() === now.getFullYear()) return (d.getMonth()+1) + '月' + d.getDate() + '日 ' + hm;
-  return d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + hm;
-}
-document.querySelectorAll('.msg-time[data-utc]').forEach(el => { el.textContent = fmtTime(el.dataset.utc); });
-(function insertDateSeps() {
-  const rows = [...list.querySelectorAll('.msg-row[data-id]')];
-  let lastDateKey = null;
-  rows.forEach(row => {
-    const timeEl = row.querySelector('.msg-time[data-utc]');
-    if (!timeEl) return;
-    const d = new Date(timeEl.dataset.utc + 'Z');
-    const dateKey = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
-    if (dateKey !== lastDateKey) {
-      lastDateKey = dateKey;
-      const sep = document.createElement('div'); sep.className = 'date-sep';
-      const now = new Date(); const yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
-      if (d.toDateString() === now.toDateString()) sep.textContent = '今天';
-      else if (d.toDateString() === yesterday.toDateString()) sep.textContent = '昨天';
-      else sep.textContent = (d.getMonth()+1) + '月' + d.getDate() + '日';
-      list.insertBefore(sep, row);
+  // ==================== 原有聊天逻辑完全保留，修复所有语法错误 ====================
+  function fmtTime(utcStr) {
+    const d = new Date(utcStr.includes('Z') ? utcStr : utcStr + 'Z');
+    const now = new Date();
+    const hm  = d.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', hour12:false });
+    const sameDay = (a, b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (sameDay(d, now))       return hm;
+    if (sameDay(d, yesterday)) return '昨天 ' + hm;
+    if (d.getFullYear() === now.getFullYear())
+      return (d.getMonth()+1) + '月' + d.getDate() + '日 ' + hm;
+    return d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate() + ' ' + hm;
+  }
+
+  // 初始化历史消息时间
+  document.querySelectorAll('.msg-time[data-utc]').forEach(el => {
+    el.textContent = fmtTime(el.dataset.utc);
+  });
+
+  // 插入日期分隔线
+  (function insertDateSeps() {
+    const rows = [...list.querySelectorAll('.msg-row[data-id]')];
+    let lastDateKey = null;
+    rows.forEach(row => {
+      const timeEl = row.querySelector('.msg-time[data-utc]');
+      if (!timeEl) return;
+      const d = new Date(timeEl.dataset.utc + 'Z');
+      const dateKey = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+      if (dateKey !== lastDateKey) {
+        lastDateKey = dateKey;
+        const sep = document.createElement('div');
+        sep.className = 'date-sep';
+        const now = new Date();
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate()-1);
+        if (d.toDateString() === now.toDateString())
+          sep.textContent = '今天';
+        else if (d.toDateString() === yesterday.toDateString())
+          sep.textContent = '昨天';
+        else
+          sep.textContent = (d.getMonth()+1) + '月' + d.getDate() + '日';
+        list.insertBefore(sep, row);
+      }
+    });
+  })();
+
+  // 滚动到底部
+  function scrollBot() { 
+    list.scrollTop = list.scrollHeight; 
+  }
+  scrollBot();
+
+  // XSS转义
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\n{2,}/g,'<br><br>')
+            .replace(/\n/g,' ');
+  }
+
+  // 添加消息气泡
+  function addBubble(m, utcStr) {
+    const me = (m.sender_id === ME);
+    const init = me ? INIT_ME : INIT_THEM;
+    const timeStr = fmtTime(utcStr ? utcStr : new Date().toISOString());
+    const row = document.createElement('div');
+    row.className = 'msg-row' + (me ? ' me' : '');
+    if (m.id) row.dataset.id = m.id;
+
+    row.innerHTML =
+      `<div class="msg-av" style="background:linear-gradient(135deg,${me ? '#4a6cf3,#f15bb5' : '#06d6a0,#4a6cf3'})">${init}</div>` +
+      `<div style="display:flex;flex-direction:column;${me ? 'align-items:flex-end' : 'align-items:flex-start'}">` +
+      `<div class="msg-time" style="${me ? 'text-align:right' : ''}">${timeStr}</div>` +
+      `<div class="bubble-wrap">` +
+      `<div class="bubble ${me ? 'me' : 'them'}">${esc(m.content)}</div>` +
+      `</div></div>`;
+
+    // 修复致命语法错误：补全?.
+    document.getElementById('emptyHint')?.remove();
+    list.appendChild(row);
+    scrollBot();
+  }
+
+  // 发送消息核心逻辑
+  async function send() {
+    const content = txt.value.trim();
+    if (!content) return;
+    // 清空输入框，重置高度
+    txt.value = '';
+    txt.style.height = 'auto';
+    // 本地先渲染气泡
+    addBubble({ sender_id: ME, content }, new Date().toISOString());
+    // 提交到后端
+    const fd = new FormData();
+    fd.append('content', content);
+    try {
+      const res = await fetch('/messages/' + TGT, {
+        method: 'POST', 
+        body: fd,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.id && d.id > lastId) lastId = d.id;
+      }
+    } catch(e) { 
+      console.error('发送失败', e); 
+    }
+  }
+
+  // ==================== 修复Enter发送逻辑，100%正常工作 ====================
+  // 点击发送按钮绑定
+  sendBtn.addEventListener('click', send);
+
+  // 键盘事件：Enter发送，Shift+Enter换行
+  txt.addEventListener('keydown', e => {
+    // 仅当按下Enter、且没有按Shift时，触发发送
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // 彻底阻止默认换行行为
+      send();
     }
   });
-})();
-function scrollBot() { list.scrollTop = list.scrollHeight; } scrollBot();
-function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n{2,}/g,'<br><br>').replace(/\n/g,' '); }
-function addBubble(m, utcStr) {
-  const me = (m.sender_id === ME);
-  const init = me ? INIT_ME : INIT_THEM;
-  const timeStr = fmtTime(utcStr ? utcStr : new Date().toISOString());
-  const row = document.createElement('div');
-  row.className = 'msg-row' + (me ? ' me' : '');
-  if (m.id) row.dataset.id = m.id;
-  row.innerHTML = `<div class="msg-av" style="background:linear-gradient(135deg,${me ? '#4a6cf3,#f15bb5' : '#06d6a0,#4a6cf3'})">${init}</div>` +
-    `<div style="display:flex;flex-direction:column;${me ? 'align-items:flex-end' : 'align-items:flex-start'}">` +
-    `<div class="msg-time" style="${me ? 'text-align:right' : ''}">${timeStr}</div>` +
-    `<div class="bubble-wrap"><div class="bubble ${me ? 'me' : 'them'}">${esc(m.content)}</div></div></div>`;
-  document.getElementById('emptyHint')?remove();
-  list.appendChild(row); scrollBot();
-}
-async function send() {
-  const content = txt.value.trim(); if (!content) return;
-  txt.value = ''; txt.style.height = 'auto';
-  addBubble({ sender_id: ME, content }, new Date().toISOString());
-  const fd = new FormData(); fd.append('content', content);
-  try {
-    const res = await fetch('/messages/' + TGT, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-    if (res.ok) { const d = await res.json(); if (d.id && d.id > lastId) lastId = d.id; }
-  } catch(e) { console.error('发送失败', e); }
-}
-document.getElementById('sendBtn').addEventListener('click', send);
-txt.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
-txt.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
-async function poll() {
-  try {
-    const res = await fetch('/api/messages/' + TGT + '/poll?since=' + lastId);
-    if (!res.ok) return; const msgs = await res.json();
-    msgs.forEach(m => { if (m.sender_id !== ME) addBubble(m, m.created_at); if (m.id > lastId) lastId = m.id; });
-  } catch(e) {}
-}
-setInterval(poll, 1000);
+
+  // 输入框自动高度适配
+  txt.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+
+  // 消息轮询
+  async function poll() {
+    try {
+      const res = await fetch('/api/messages/' + TGT + '/poll?since=' + lastId);
+      if (!res.ok) return;
+      const msgs = await res.json();
+      msgs.forEach(m => {
+        if (m.sender_id !== ME) {
+          addBubble(m, m.created_at);
+        }
+        if (m.id > lastId) lastId = m.id;
+      });
+    } catch(e) {
+      // 网络静默忽略
+    }
+  }
+  setInterval(poll, 1000);
+});
 </script>
 {% endblock %}
