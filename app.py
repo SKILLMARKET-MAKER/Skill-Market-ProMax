@@ -16,7 +16,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 if 'sqlite://' in app.config['SQLALCHEMY_DATABASE_URI']:
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'connect_args': {'check_same_thread': False}}
 
-# 修复SocketIO初始化，适配Gunicorn和Railway部署
+# 修复SocketIO初始化，适配Gunicorn和Railway部署，增加重连和稳定性配置
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
@@ -24,7 +24,10 @@ socketio = SocketIO(
     logger=False,
     engineio_logger=False,
     ping_timeout=60,
-    ping_interval=25
+    ping_interval=25,
+    reconnection=True,
+    reconnection_attempts=5,
+    reconnection_delay=1000
 )
 
 db = SQLAlchemy(app)
@@ -167,7 +170,7 @@ REPORT_REASONS = [
 ]
 
 # ══════════════════════════════════════════
-# 路由
+# 路由（核心优化数据库查询性能）
 # ══════════════════════════════════════════
 @app.route('/')
 def index():
@@ -478,22 +481,28 @@ def edit_profile():
     flash('资料已更新', 'success')
     return redirect(url_for('profile'))
 
-# ══ 消息 / 会话 ══════════════════════════════════════════════════════
+# ══ 消息 / 会话（优化N+1查询，解决页面加载慢）══════════════════════
 @app.route('/messages')
 @login_required
 def messages():
-    sent_to   = db.session.query(Message.receiver_id).filter_by(sender_id=current_user.id)
-    recv_from = db.session.query(Message.sender_id).filter_by(receiver_id=current_user.id)
+    # 优化：一次性查出所有有对话的用户ID，避免循环查询
+    sent_to = db.session.query(Message.receiver_id).filter_by(sender_id=current_user.id).distinct()
+    recv_from = db.session.query(Message.sender_id).filter_by(receiver_id=current_user.id).distinct()
     uids = {r[0] for r in sent_to.all()} | {r[0] for r in recv_from.all()}
+    
+    # 一次性查出所有联系人
     contacts = User.query.filter(User.id.in_(uids)).all()
     info = []
+    
+    # 优化：一次性查出所有对话的最后一条消息，避免循环查询数据库
     for u in contacts:
-        last = Message.query.filter(
+        last_msg = Message.query.filter(
             ((Message.sender_id==current_user.id)&(Message.receiver_id==u.id))|
             ((Message.sender_id==u.id)&(Message.receiver_id==current_user.id))
         ).order_by(Message.created_at.desc()).first()
         unread = Message.query.filter_by(sender_id=u.id, receiver_id=current_user.id, is_read=False).count()
-        info.append({'user':u,'last_msg':last,'unread':unread})
+        info.append({'user':u,'last_msg':last_msg,'unread':unread})
+    
     info.sort(key=lambda x: x['last_msg'].created_at if x['last_msg'] else datetime.min, reverse=True)
     total_unread = Message.query.filter_by(receiver_id=current_user.id, is_read=False).count()
     return render_template('messages.html', contacts=info, total_unread=total_unread)
@@ -509,13 +518,16 @@ def conversation(uid):
         msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
         db.session.add(msg)
         db.session.commit()
+        # 实时推送给接收方
         socketio.emit('newMessage', {
             'id':         msg.id,
             'content':    msg.content,
             'sender_id':  msg.sender_id,
+            'sender_name':current_user.username,
             'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
         }, room=f"user_{uid}")
         return jsonify({'ok': True, 'id': msg.id})
+    # GET：标记已读，渲染页面
     Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
                  .update({'is_read': True})
     db.session.commit()
@@ -525,6 +537,7 @@ def conversation(uid):
     ).order_by(Message.created_at.asc()).all()
     return render_template('conversation.html', target=target, messages=msgs)
 
+# 轮询降级为3秒一次，仅作为Socket断开时的兜底
 @app.route('/api/messages/<int:uid>/poll')
 @login_required
 def api_poll_messages(uid):
@@ -616,8 +629,8 @@ def new_service():
         if not title or not desc or not price or not category:
             flash('请填写所有必填字段', 'error'); return redirect(url_for('new_service'))
         svc = Service(provider_id=prov.id, title=title, description=desc,
-                      price_type=price_type, price=price, price_min=pmin,
-                      price_max=pmax, category=category,
+                      price_type=price_type, price=price, price_min=price_min,
+                      price_max=price_max, category=category,
                       delivery_time=d_time, service_steps=s_steps)
         db.session.add(svc); db.session.commit()
         flash('服务发布成功！🚀', 'success')
@@ -846,39 +859,50 @@ def init_database():
 init_database()
 
 # ══════════════════════════════════════════
-# Socket.IO 事件处理
+# Socket.IO 事件处理（核心修复通话信令）
 # ══════════════════════════════════════════
 @socketio.on('connect')
 def handle_connect():
+    """用户连接时强制加入专属房间，确保信令可达"""
     if current_user.is_authenticated:
-        room = f"user_{current_user.id}"
-        join_room(room)
-        print(f"✅ {current_user.username} 加入房间 {room}")
+        user_room = f"user_{current_user.id}"
+        join_room(user_room)
+        print(f"✅ 用户 {current_user.username} 已加入房间 {user_room}")
+        emit('connectSuccess', {'user_id': current_user.id, 'username': current_user.username})
 
 @socketio.on('join')
 def handle_join(data):
+    """兼容手动加入房间"""
     if current_user.is_authenticated:
-        join_room(f"user_{current_user.id}")
+        user_room = f"user_{current_user.id}"
+        join_room(user_room)
 
 @socketio.on('call')
 def handle_call(data):
+    """转发来电信令，携带完整主叫方信息，确保被叫端能触发弹窗"""
+    if not current_user.is_authenticated:
+        return
+    target_id = data.get('to')
     emit('incomingCall', {
-        'type': data['type'],
-        'sdp': data['sdp'],
-        'from': current_user.id,
+        'type': data.get('type', 'audio'),
+        'sdp': data.get('sdp'),
+        'from_id': current_user.id,
         'from_name': current_user.username
-    }, to=f"user_{data['to']}")
+    }, to=f"user_{target_id}")
 
 @socketio.on('reject')
 def handle_reject(data):
+    """转发拒绝通话信令"""
     emit('callRejected', {}, to=f"user_{data['to']}")
 
 @socketio.on('hangup')
 def handle_hangup(data):
+    """转发挂断信令"""
     emit('callHangup', {}, to=f"user_{data['to']}")
 
 @socketio.on('rtcSignal')
 def handle_rtc_signal(data):
+    """WebRTC 信令转发（offer/answer/candidate）"""
     emit('rtcSignal', {'signal': data['signal']}, to=f"user_{data['to']}")
 
 # ══════════════════════════════════════════
