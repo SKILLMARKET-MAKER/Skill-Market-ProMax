@@ -495,7 +495,6 @@ def messages():
     total_unread = Message.query.filter_by(receiver_id=current_user.id, is_read=False).count()
     return render_template('messages.html', contacts=info, total_unread=total_unread)
 
-# ── 修复：POST 返回消息 id；GET 渲染 conversation.html ─────────────────
 @app.route('/messages/<int:uid>', methods=['GET','POST'])
 @login_required
 def conversation(uid):
@@ -507,9 +506,15 @@ def conversation(uid):
         msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
         db.session.add(msg)
         db.session.commit()
-        # ── 关键修复：返回消息 id，前端用来更新 lastId 防止轮询重复 ──
+        # ── 新增：通过 Socket.IO 实时推送给对方 ──
+        socketio.emit('newMessage', {
+            'id':        msg.id,
+            'content':   msg.content,
+            'sender_id': msg.sender_id,
+            'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+        }, room=f"user_{uid}")
         return jsonify({'ok':True, 'id': msg.id})
-    # GET：标记已读，返回页面
+    # GET 部分不变...
     Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
                  .update({'is_read':True})
     db.session.commit()
