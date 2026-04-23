@@ -6,21 +6,38 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
 
+# 初始化Flask应用
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+# 适配Railway部署，读取环境变量配置
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'skillmarket-threementogether-2026')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///skillmarket.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///skillmarket.db').replace('postgres://', 'postgresql://')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# 修复SQLite多线程访问问题
+if 'sqlite://' in app.config['SQLALCHEMY_DATABASE_URI']:
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'connect_args': {'check_same_thread': False}}
+
+# 修复SocketIO初始化，适配Gunicorn和Railway部署
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='eventlet',
+    logger=False,
+    engineio_logger=False,
+    ping_timeout=60,
+    ping_interval=25
+)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = '请先登录'
 
+# 全局变量，控制数据库仅初始化一次，避免多worker重复执行
+DB_INITIALIZED = False
+
 # ══════════════════════════════════════════
 # 数据模型
 # ══════════════════════════════════════════
-
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -136,11 +153,9 @@ def load_user(user_id):
 # ══════════════════════════════════════════
 # 常量
 # ══════════════════════════════════════════
-
 CATEGORIES = ['设计', '编程', '摄影', '语言', '音乐', '教育', '营销', '写作', '视频', '其他']
 CAT_ICONS  = {'设计':'🎨','编程':'💻','摄影':'📸','语言':'🌐','音乐':'🎵',
               '教育':'📚','营销':'📢','写作':'✍️','视频':'🎬','其他':'⭐'}
-
 REPORT_REASONS = [
     '虚假宣传 / 服务与描述严重不符',
     '诈骗 / 收款后拒绝提供服务',
@@ -154,7 +169,6 @@ REPORT_REASONS = [
 # ══════════════════════════════════════════
 # 路由
 # ══════════════════════════════════════════
-
 @app.route('/')
 def index():
     featured  = Service.query.filter_by(is_active=True).order_by(Service.order_count.desc()).limit(8).all()
@@ -353,8 +367,8 @@ def deliver_order(oid):
         return jsonify({'ok':False,'msg':'无权操作'}), 403
     if order.status != 'in_progress':
         return jsonify({'ok':False,'msg':'当前状态不允许交付'})
-    deliver_note = request.form.get('note','').strip()
-    deliver_link = request.form.get('link','').strip()
+    deliver_note = request.form.get('deliver_note','').strip()
+    deliver_link = request.form.get('deliver_link','').strip()
     if not deliver_note:
         return jsonify({'ok':False,'msg':'请填写交付说明'})
     order.status       = 'delivered'
@@ -465,7 +479,6 @@ def edit_profile():
     return redirect(url_for('profile'))
 
 # ══ 消息 / 会话 ══════════════════════════════════════════════════════
-
 @app.route('/messages')
 @login_required
 def messages():
@@ -485,7 +498,6 @@ def messages():
     total_unread = Message.query.filter_by(receiver_id=current_user.id, is_read=False).count()
     return render_template('messages.html', contacts=info, total_unread=total_unread)
 
-# ★ 唯一的 conversation 路由（已合并推送逻辑，删除重复定义）
 @app.route('/messages/<int:uid>', methods=['GET','POST'])
 @login_required
 def conversation(uid):
@@ -497,7 +509,6 @@ def conversation(uid):
         msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
         db.session.add(msg)
         db.session.commit()
-        # 实时推送给接收方
         socketio.emit('newMessage', {
             'id':         msg.id,
             'content':    msg.content,
@@ -505,7 +516,6 @@ def conversation(uid):
             'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
         }, room=f"user_{uid}")
         return jsonify({'ok': True, 'id': msg.id})
-    # GET：标记已读，渲染页面
     Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
                  .update({'is_read': True})
     db.session.commit()
@@ -535,7 +545,6 @@ def api_poll_messages(uid):
     } for m in msgs])
 
 # ══ 举报 ══
-
 @app.route('/report', methods=['GET','POST'])
 @login_required
 def report():
@@ -563,7 +572,6 @@ def report():
                            target_id=target_id, REPORT_REASONS=REPORT_REASONS)
 
 # ══ 服务提供者后台 ══
-
 @app.route('/provider/dashboard')
 @login_required
 def provider_dashboard():
@@ -608,8 +616,8 @@ def new_service():
         if not title or not desc or not price or not category:
             flash('请填写所有必填字段', 'error'); return redirect(url_for('new_service'))
         svc = Service(provider_id=prov.id, title=title, description=desc,
-                      price_type=price_type, price=price, price_min=price_min,
-                      price_max=price_max, category=category,
+                      price_type=price_type, price=price, price_min=pmin,
+                      price_max=pmax, category=category,
                       delivery_time=d_time, service_steps=s_steps)
         db.session.add(svc); db.session.commit()
         flash('服务发布成功！🚀', 'success')
@@ -640,7 +648,6 @@ def edit_service(sid):
     return render_template('service_form.html', service=svc, categories=CATEGORIES)
 
 # ══ 管理面板 ══
-
 @app.route('/admin')
 @login_required
 def admin_panel():
@@ -674,29 +681,23 @@ def handle_report(rid):
     return jsonify({'ok':True})
 
 # ══ 静态内容页面 ══
-
 @app.route('/about')
 def about():
     return render_template('about.html')
-
 @app.route('/team')
 def team():
     return render_template('team.html')
-
 @app.route('/terms')
 def terms():
     return render_template('terms.html')
-
 @app.route('/privacy')
 def privacy():
     return render_template('privacy.html')
-
 @app.route('/help')
 def help_center():
     return render_template('help.html')
 
 # ══ 搜索 API ══
-
 @app.route('/api/search')
 def api_search():
     q = request.args.get('q','').strip()
@@ -709,10 +710,55 @@ def api_search():
                      'price_type':s.price_type,'category':s.category} for s in results])
 
 # ══════════════════════════════════════════
-# 示例数据
+# 数据库初始化与迁移
 # ══════════════════════════════════════════
+def auto_migrate():
+    """安全的字段迁移，先判断表是否存在，再执行操作"""
+    db_url = app.config['SQLALCHEMY_DATABASE_URI']
+    try:
+        if 'postgresql' in db_url or 'postgres' in db_url:
+            migrations = [
+                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS deliver_note TEXT DEFAULT ''",
+                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS deliver_link VARCHAR(500) DEFAULT ''",
+                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP",
+                "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_id INTEGER",
+            ]
+            with db.engine.connect() as conn:
+                for sql in migrations:
+                    try:
+                        conn.execute(db.text(sql))
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+        else:
+            import sqlite3
+            db_path = db_url.replace('sqlite:///', '')
+            if not db_path or db_path == ':memory:':
+                return
+            con = sqlite3.connect(db_path)
+            cur = con.cursor()
+            def table_exists(table):
+                cur.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
+                return cur.fetchone() is not None
+            def col_exists(table, col):
+                cur.execute(f"PRAGMA table_info({table})")
+                return any(r[1] == col for r in cur.fetchall())
+            migrations = [
+                ('orders',  'deliver_note', "ALTER TABLE orders ADD COLUMN deliver_note TEXT DEFAULT ''"),
+                ('orders',  'deliver_link', "ALTER TABLE orders ADD COLUMN deliver_link VARCHAR(500) DEFAULT ''"),
+                ('orders',  'delivered_at', 'ALTER TABLE orders ADD COLUMN delivered_at DATETIME'),
+                ('reviews', 'service_id',   'ALTER TABLE reviews ADD COLUMN service_id INTEGER'),
+            ]
+            for table, col, sql in migrations:
+                if table_exists(table) and not col_exists(table, col):
+                    cur.execute(sql)
+                    print(f'迁移: 添加字段 {table}.{col}')
+            con.commit(); cur.close(); con.close()
+    except Exception as e:
+        print(f'迁移时出错（可忽略）: {e}')
 
 def seed():
+    """示例数据初始化，仅在无数据时执行"""
     if User.query.count() > 0:
         return
     admin = User(username='admin', email='admin@skillmarket.com',
@@ -785,67 +831,23 @@ def seed():
     db.session.commit()
     print('✅ 示例数据初始化完成')
 
-def auto_migrate():
-    db_url = app.config['SQLALCHEMY_DATABASE_URI']
-    try:
-        if 'postgresql' in db_url or 'postgres' in db_url:
-            migrations = [
-                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS deliver_note TEXT DEFAULT ''",
-                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS deliver_link VARCHAR(500) DEFAULT ''",
-                "ALTER TABLE orders  ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP",
-                "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_id INTEGER",
-            ]
-            with db.engine.connect() as conn:
-                for sql in migrations:
-                    try:
-                        conn.execute(db.text(sql))
-                        conn.commit()
-                    except Exception:
-                        conn.rollback()
-        else:
-            import sqlite3
-            db_path = db_url.replace('sqlite:///', '')
-            if not db_path or db_path == ':memory:':
-                return
-            con = sqlite3.connect(db_path)
-            cur = con.cursor()
-            def col_exists(table, col):
-                cur.execute(f"PRAGMA table_info({table})")
-                return any(r[1] == col for r in cur.fetchall())
-            migrations = [
-                ('orders',  'deliver_note', "ALTER TABLE orders ADD COLUMN deliver_note TEXT DEFAULT ''"),
-                ('orders',  'deliver_link', "ALTER TABLE orders ADD COLUMN deliver_link VARCHAR(500) DEFAULT ''"),
-                ('orders',  'delivered_at', 'ALTER TABLE orders ADD COLUMN delivered_at DATETIME'),
-                ('reviews', 'service_id',   'ALTER TABLE reviews ADD COLUMN service_id INTEGER'),
-            ]
-            for table, col, sql in migrations:
-                if not col_exists(table, col):
-                    cur.execute(sql)
-                    print(f'迁移: 添加字段 {table}.{col}')
-            con.commit(); cur.close(); con.close()
-    except Exception as e:
-        print(f'迁移时出错（可忽略）: {e}')
-
-with app.app_context():
-    db.create_all()
-    auto_migrate()
-    seed()
-
-if __name__ == '__main__':
+# 数据库初始化，仅执行一次
+def init_database():
+    global DB_INITIALIZED
+    if DB_INITIALIZED:
+        return
     with app.app_context():
         db.create_all()
         auto_migrate()
         seed()
-    print('\n' + '═'*50)
-    print('  🚀  SkillMarket 已启动！')
-    print('  🌐  Railway 部署中...')
-    print('═'*50 + '\n')
-    pass
+        DB_INITIALIZED = True
+
+# 应用启动时执行初始化
+init_database()
 
 # ══════════════════════════════════════════
 # Socket.IO 事件处理
 # ══════════════════════════════════════════
-
 @socketio.on('connect')
 def handle_connect():
     if current_user.is_authenticated:
@@ -862,7 +864,9 @@ def handle_join(data):
 def handle_call(data):
     emit('incomingCall', {
         'type': data['type'],
-        'room': data.get('room', '')
+        'sdp': data['sdp'],
+        'from': current_user.id,
+        'from_name': current_user.username
     }, to=f"user_{data['to']}")
 
 @socketio.on('reject')
@@ -872,7 +876,14 @@ def handle_reject(data):
 @socketio.on('hangup')
 def handle_hangup(data):
     emit('callHangup', {}, to=f"user_{data['to']}")
+
 @socketio.on('rtcSignal')
 def handle_rtc_signal(data):
-    """WebRTC 信令转发（offer/answer/candidate）"""
     emit('rtcSignal', {'signal': data['signal']}, to=f"user_{data['to']}")
+
+# ══════════════════════════════════════════
+# 应用启动入口
+# ══════════════════════════════════════════
+if __name__ == '__main__':
+    PORT = int(os.environ.get('PORT', 8080))
+    socketio.run(app, host='0.0.0.0', port=PORT, debug=False)
