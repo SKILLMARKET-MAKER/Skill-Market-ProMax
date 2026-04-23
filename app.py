@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_socketio import SocketIO, emit
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import join_room
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
@@ -524,27 +525,33 @@ def conversation(uid):
     ).order_by(Message.created_at.asc()).all()
     return render_template('conversation.html', target=target, messages=msgs)
 
-# ── 修复：轮询接口路径改为 /poll（与前端 conversation.html 一致）──────────
-# 原来是 /api/messages/<uid>/new → 现在统一为 /api/messages/<uid>/poll
-@app.route('/api/messages/<int:uid>/poll')
+@app.route('/messages/<int:uid>', methods=['GET','POST'])
 @login_required
-def api_poll_messages(uid):
-    since = request.args.get('since', type=int, default=0)
-    msgs  = Message.query.filter(
-        Message.sender_id==uid,
-        Message.receiver_id==current_user.id,
-        Message.id > since
-    ).order_by(Message.created_at.asc()).all()
-    for m in msgs:
-        m.is_read = True
+def conversation(uid):
+    target = User.query.get_or_404(uid)
+    if request.method == 'POST':
+        content = request.form.get('content','').strip()
+        if not content:
+            return jsonify({'ok':False,'msg':'消息不能为空'})
+        msg = Message(sender_id=current_user.id, receiver_id=uid, content=content)
+        db.session.add(msg)
+        db.session.commit()
+        # 实时推送给接收方
+        socketio.emit('newMessage', {
+            'id':         msg.id,
+            'content':    msg.content,
+            'sender_id':  msg.sender_id,
+            'created_at': msg.created_at.strftime('%Y-%m-%dT%H:%M:%S')
+        }, to=f"user_{uid}")
+        return jsonify({'ok': True, 'id': msg.id})
+    Message.query.filter_by(sender_id=uid, receiver_id=current_user.id, is_read=False)\
+                 .update({'is_read': True})
     db.session.commit()
-    return jsonify([{
-        'id':         m.id,
-        'content':    m.content,
-        'sender_id':  m.sender_id,
-        # ── 返回 UTC ISO 字符串，前端负责转本地时区显示 ──
-        'created_at': m.created_at.strftime('%Y-%m-%dT%H:%M:%S')
-    } for m in msgs])
+    msgs = Message.query.filter(
+        ((Message.sender_id==current_user.id)&(Message.receiver_id==uid))|
+        ((Message.sender_id==uid)&(Message.receiver_id==current_user.id))
+    ).order_by(Message.created_at.asc()).all()
+    return render_template('conversation.html', target=target, messages=msgs)
 
 # ══ 举报 ══
 
@@ -858,21 +865,30 @@ if __name__ == '__main__':
     print('═'*50 + '\n')
     # 生产环境用 Railway 的 Gunicorn 启动，这里可以直接 pass
     pass
-# ===================== 音视频通话 实时通知 =====================
 @socketio.on('connect')
 def handle_connect():
     if current_user.is_authenticated:
-        socketio.server.enter_room(request.sid, f"user_{current_user.id}")
+        room = f"user_{current_user.id}"
+        join_room(room)
+        print(f"✅ {current_user.username} 加入房间 {room}")
+
+@socketio.on('join')
+def handle_join(data):
+    if current_user.is_authenticated:
+        room = f"user_{current_user.id}"
+        join_room(room)
 
 @socketio.on('call')
 def handle_call(data):
-    # 注意：这里补上 room 字段的转发
-    emit('incomingCall', {'type': data['type'], 'room': data.get('room','')}, room=f"user_{data['to']}")
+    emit('incomingCall', {
+        'type': data['type'],
+        'room': data.get('room', '')
+    }, to=f"user_{data['to']}")
 
 @socketio.on('reject')
 def handle_reject(data):
-    emit('callRejected', {}, room=f"user_{data['to']}")
+    emit('callRejected', {}, to=f"user_{data['to']}")
 
 @socketio.on('hangup')
 def handle_hangup(data):
-    emit('callHangup', {}, room=f"user_{data['to']}")
+    emit('callHangup', {}, to=f"user_{data['to']}")
